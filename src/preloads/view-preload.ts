@@ -4,6 +4,7 @@ import AutoComplete from './models/auto-complete';
 import { getTheme } from '~/utils/themes';
 import { ERROR_PROTOCOL, WEBUI_BASE_URL } from '~/constants/files';
 import { injectChromeWebstoreInstallButton } from './chrome-webstore';
+import { TCData, TCFWindow } from '~/main/tcfwindow';
 
 const tabId = ipcRenderer.sendSync('get-webcontents-id');
 
@@ -226,3 +227,16 @@ if (window.location.href.startsWith(WEBUI_BASE_URL)) {
     );
   });
 }
+
+ipcRenderer.on('tcfapi-grabber', async () => {
+  const w = await webFrame.executeJavaScript('window');
+  if ('function' === typeof (w as TCFWindow).__tcfapi) {
+    (w as TCFWindow).__tcfapi(
+      'getTCData',
+      0,
+      (tcData: TCData, success: boolean) => {
+        success && ipcRenderer.send('tcdata', tcData);
+      },
+    );
+  }
+});

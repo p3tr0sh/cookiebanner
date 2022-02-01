@@ -1,8 +1,19 @@
-import { BrowserView, app, ipcMain } from 'electron';
+import {
+  BrowserView,
+  app,
+  ipcMain,
+  Cookies,
+  Event,
+  Cookie,
+  CookiesSetDetails,
+  dialog,
+  BrowserWindow,
+  webFrame,
+} from 'electron';
 import { parse as parseUrl } from 'url';
 import { getViewMenu } from './menus/view';
 import { AppWindow } from './windows';
-import { IHistoryItem, IBookmark } from '~/interfaces';
+import { IHistoryItem, IBookmark, ICookiePolicyItem } from '~/interfaces';
 import {
   ERROR_PROTOCOL,
   NETWORK_ERROR_HOST,
@@ -19,8 +30,57 @@ import { Queue } from '~/utils/queue';
 import { Application } from './application';
 import { getUserAgentForURL } from './user-agent';
 
+import { readFile } from 'fs';
+import { join } from 'path';
+import { TCData, TCFWindow } from './tcfwindow';
+import { v4 as uuid } from 'uuid';
+import { request } from 'http';
+import { transmitJSON } from './network/request';
+import { UUID } from '~/utils';
+
 interface IAuthInfo {
   url: string;
+}
+
+type CookieEvent = {
+  event: Event;
+  cookie: Cookie;
+  cause: 'explicit' | 'overwrite' | 'expired' | 'evicted' | 'expired-overwrite';
+  removed: boolean;
+};
+
+type TempCookieJar = {
+  [url: string]: CookieEvent[];
+};
+
+const activationCookie: CookiesSetDetails = {
+  url: 'http://localhost',
+  name: 'myActivationCookie',
+  value: 'useTempJar',
+};
+const deactivationCookie: CookiesSetDetails = {
+  url: 'http://localhost',
+  name: 'myActivationCookie',
+  value: 'dontUseTempJar',
+};
+
+function checkCookie(cookie: Cookie, activation: CookiesSetDetails): boolean {
+  return (
+    activation.url.includes(cookie.domain) &&
+    cookie.name === activation.name &&
+    cookie.value === activation.value
+  );
+}
+
+function checkURL(urlString: string): { valid: boolean; url: URL } {
+  if (!urlString || urlString === '') {
+    return { valid: false, url: undefined };
+  }
+  // check scheme or prepend http
+  if (!urlString.includes('://')) {
+    urlString = `http://${urlString}`;
+  }
+  return { valid: true, url: new URL(urlString) };
 }
 
 export class View {
@@ -54,6 +114,11 @@ export class View {
   private historyQueue = new Queue();
 
   private lastUrl = '';
+
+  private tempCookieJar: TempCookieJar = {};
+  private useTempJar: boolean = false;
+  private nativeCookieBannerWindow: BrowserWindow;
+  private nativeCookieBannerWindowReady = false;
 
   public constructor(window: AppWindow, url: string, incognito: boolean) {
     this.browserView = new BrowserView({
@@ -91,6 +156,123 @@ export class View {
         callback({ requestHeaders: details.requestHeaders });
       },
     );
+
+    this.nativeCookieBannerWindow = new BrowserWindow({
+      parent: this.window.win,
+      // modal: true,
+      minimizable: false,
+      maximizable: false,
+      title: 'Cookie Policy Manager',
+      show: false,
+      webPreferences: {
+        preload: join(app.getAppPath(), 'preload.js'),
+      },
+    });
+    this.nativeCookieBannerWindow.loadFile(
+      join(app.getAppPath(), 'myBanner.html'),
+    );
+    this.nativeCookieBannerWindow.once('ready-to-show', () => {
+      this.nativeCookieBannerWindowReady = true;
+    });
+
+    const cookies = this.webContents.session.cookies;
+    // cookies.removeAllListeners();
+    // cookies.addListener('changed', (event, cookie, cause, removed) => {
+    //   // console.log(cookie.domain);
+    //   var url = cookie.domain;
+    //   if (url.startsWith('.')) {
+    //     url = `www${url}`;
+    //   }
+    //   if (!url.startsWith('http')) {
+    //     url = `http://${url}`;
+    //   }
+    //   console.log(`Cookie change cause: ${cause}`);
+
+    //   // this.tempCookieJar.emit('changed', event, cookie, cause, removed);
+    //   // cookies
+    //   //   .set({ url, name: cookie.name, value: cookie.value })
+    //   //   .then(() => {
+    //   //     console.log('done');
+    //   //   })
+    //   //   .catch((r) => {
+    //   //     console.log(r);
+    //   //   });
+    //   // deactivation
+    //   if (checkCookie(cookie, activationCookie)) {
+    //     console.log('activate JAR');
+    //     this.useTempJar = true;
+    //   } else if (checkCookie(cookie, deactivationCookie)) {
+    //     console.log('deactivate JAR');
+    //     this.useTempJar = false;
+    //   } else {
+    //     if (this.useTempJar) {
+    //       // cookies
+    //       //   .remove(url, cookie.name)
+    //       //   .then(() => {
+    //       //     console.log(`removed ${cookie.name} from ${cookie.domain}`);
+    //       //   })
+    //       //   .catch((r) => {
+    //       //     console.log(r);
+    //       //   });
+    //       // cookies.flushStore();
+    //       this.addToJar(url, { event, cookie, cause, removed });
+    //       this.webContents.session.clearStorageData({ storages: ['cookies'] });
+    //     }
+    //   }
+    //   // console.log(JSON.stringify(this.tempCookieJar, null, 2));
+    // });
+
+    // this.webContents.session.cookies.addListener(
+    //   'changed',
+    //   (event, cookie, cause, removed) => {
+    //     console.log(
+    //       `Cookies changed: \nEvent: ${JSON.stringify(
+    //         event,
+    //       )}\nCookie: ${JSON.stringify(cookie)}\nCause: ${JSON.stringify(
+    //         cause,
+    //       )}\nRemoved: ${removed}`,
+    //     );
+    //     if (!removed) {
+    //       cookies.removeAllListeners()
+    //       this.webContents.session.cookies
+    //         .set({
+    //           url: cookie.domain,
+    //           name: cookie.name,
+    //           value: '',
+    //         })
+    //         .then(() => {
+    //           console.log(`reset ${cookie.} :: ${cookie.name}`);
+    //         })
+    //         .catch((reason) => {
+    //           console.log(`ERROR: ${reason}`);
+    //         });
+    //       // this.webContents.session.cookies
+    //       //   .remove(cookie.domain, cookie.name)
+    //       //   .then((v) => {
+    //       //     this.webContents.session.cookies
+    //       //       .get({ url: cookie.domain, name: cookie.name })
+    //       //       .then((v) => {
+    //       //         console.log(v);
+    //       //       });
+    //       //   })
+    //       //   .catch((r) => {
+    //       //     console.log('error: ', r);
+    //       //   });
+    //       this.webContents.session.cookies.flushStore().catch((r) => {
+    //         console.log(`could not flush: ${r}`);
+    //       });
+    //     }
+    //     console.log('');
+    //   },
+    // );
+
+    ///////////////////// Proxy for BurpSuite /////////////////////
+    // const proxyConfig: Electron.Config = {
+    //   mode: 'fixed_servers',
+    //   proxyRules: 'http=127.0.0.1:8080;https=127.0.0.1:8080',
+    // };
+    // this.webContents.session.setProxy(proxyConfig);
+    ///////////////////////////////////////////////////////////////
 
     ipcMain.handle(`get-error-url-${this.id}`, async (e) => {
       return this.errorURL;
@@ -194,6 +376,192 @@ export class View {
       },
     );
 
+    this.webContents.addListener('did-finish-load', async () => {
+      console.log(
+        `finished loading ${this.webContents.getTitle()} ${this.webContents.getURL()}`,
+      );
+
+      // setup my HttpRequest to request CookiePolicyManager
+      // try {
+      const showBanner = this.handleCookiePolicy();
+      console.log(`Show banner? ${showBanner}`);
+
+      // if (this.useTempJar) {
+      // console.log('clearing browser cookies. Before:');
+      // (await this.webContents.session.cookies.get({})).forEach((v) =>
+      //   console.log(`${v.domain}: ${v.name}=${v.value}`),
+      // );
+      // console.log('\n\nJAR before:');
+      // Object.entries(this.tempCookieJar).forEach(([k, v]) =>
+      //   v.forEach((evt) =>
+      //     console.log(
+      //       `${k}: ${evt.cookie.domain} :: ${evt.cookie.name}=${evt.cookie.value}`,
+      //     ),
+      //   ),
+      // );
+      // console.log('\n\n\n');
+      // // cookies
+      // //   .set(deactivationCookie)
+      // //   .then(() => {
+      // this.webContents.session.clearStorageData({
+      //   storages: ['cookies'],
+      //   origin: 'http://www.metal-hammer.de',
+      // });
+      // })
+      // .catch((r) => {
+      //   console.log(r);
+      // })
+      // .finally(async () => {
+      //   cookies.set(activationCookie);
+      // console.log('\n\n\nSession after');
+      // (await this.webContents.session.cookies.get({})).forEach((v) =>
+      //   console.log(`${v.domain}: ${v.name}=${v.value}`),
+      // );
+      // console.log('\n\nJAR after:');
+      // Object.entries(this.tempCookieJar).forEach(([k, v]) =>
+      //   v.forEach((evt) =>
+      //     console.log(
+      //       `${k}: ${evt.cookie.domain} :: ${evt.cookie.name}=${evt.cookie.value}`,
+      //     ),
+      //   ),
+      // );
+      // });
+      // }
+
+      if (this.webContents.getURL() !== 'http://localhost:4444/newtab.html') {
+        // search for __tcfapi, see view-preload.ts
+        // this.send('tcfapi-grabber');
+
+        // show cookie banner; TODO: only show when no policy present
+        if (this.nativeCookieBannerWindowReady) {
+          this.nativeCookieBannerWindow.show();
+          this.nativeCookieBannerWindow.webContents.openDevTools();
+          this.nativeCookieBannerWindow.webContents.send('cookieChannel', {
+            command: 'issuer',
+            issuer: this.webContents.id,
+          });
+          // } else {
+          //   console.log('Window not ready yet :(');
+        }
+      }
+
+      // inject my js window
+      // readFile(
+      //   join(app.getAppPath(), 'inject/build/inject.js'),
+      //   'utf-8',
+      //   (err, data) => {
+      //     // console.log( );
+      //     console.log('reading file...');
+      //     this.cookieNomster = data;
+      //     if (err) console.log(err, data);
+      //   },
+      // );
+      // await this.webContents.executeJavaScript(this.cookieNomster);
+
+      // console.log(result);
+      //console.log('executed script');
+    });
+
+    ipcMain.on('cookie-window', (evt, arg) => {
+      if (arg === 'close') {
+        this.nativeCookieBannerWindow.hide();
+      } else {
+        // only needed for debug
+        console.log(`Message received: ${arg}`);
+      }
+    });
+
+    // send received TCData from the Content window to the Banner window
+    ipcMain.on('tcdata', (evt, tcdata) => {
+      this.nativeCookieBannerWindow.webContents.send('cookieChannel', {
+        command: 'response',
+        response: tcdata,
+      });
+    });
+
+    // interaction with the cookie banner ///////////////////////////////////////////////
+    ipcMain.on(
+      'cookie-whitelist',
+      async (evt, arg: { issuer: number; cmd?: string }) => {
+        // This event is sent to all instances (tabs, windows) so we have to filter with the "issuer"
+        if (arg.issuer === this.webContents.id) {
+          if (arg.cmd === 'clear') {
+            await Application.instance.storage.clearCookiePolicy();
+            console.log('cleared');
+            // } else if (arg.cmd === 'add') {
+            //   console.log('DEPRECATED: add');
+            // const url = new URL(this.webContents.getURL());
+            // console.log(url);
+            // const item: ICookiePolicyItem = {
+            //   url: url.hostname,
+            //   allowed: true,
+            // };
+            // await Application.instance.storage.addCookiePolicyItem(item);
+
+            // const l = await Application.instance.storage.find<ICookiePolicyItem>(
+            //   { scope: 'cookiewhitelist', query: {} },
+            // );
+            // l.forEach((i) => {
+            //   console.log(i);
+            // });
+          } else {
+            console.log(`unknown command: "${arg.cmd}"`);
+          }
+        }
+      },
+    );
+
+    ipcMain.on(
+      'policy-choice',
+      async (
+        evt,
+        arg: {
+          issuer: number;
+          visitorId: UUID;
+          policyReturn: { [key: string]: boolean };
+        },
+      ) => {
+        const { issuer, visitorId, policyReturn } = arg;
+        if (issuer === this.webContents.id) {
+          // Save choice in database
+          const item: ICookiePolicyItem = {
+            visitorId,
+            purposes: policyReturn,
+            isSet: true,
+          };
+          Application.instance.storage.addOrUpdateCookiePolicyItem(item);
+
+          console.log('Successfully added entry to policy storage.');
+          const origin = (
+            await Application.instance.storage.findOne<ICookiePolicyItem>({
+              scope: 'cookiepolicy',
+              query: { visitorId },
+            })
+          ).url;
+          let url: URL = checkURL(origin).url;
+
+          // Send choice to server
+          transmitJSON(url, {
+            policyReturn,
+            visitorId,
+          })
+            .then(async () => {
+              console.log('Successfully transmitted user policy.');
+              // now set cookie with visitorId and re-request other cookies
+              await cookies.set({
+                url: origin,
+                name: 'visitorId',
+                value: visitorId,
+              });
+              this.webContents.reload();
+            })
+            .catch((error) => {
+              console.log(error);
+            });
+        }
+      },
+    );
+
     this.webContents.addListener(
       'did-fail-load',
       (e, errorCode, errorDescription, validatedURL, isMainFrame) => {
@@ -285,6 +653,70 @@ export class View {
       horizontal: false,
       vertical: false,
     });
+  }
+
+  /**
+   * chack for present policy and request one if necessary
+   * @returns true if native cookie banner should be displayed
+   */
+  private handleCookiePolicy(): boolean {
+    const { valid, url } = checkURL(this.webContents.getURL());
+    if (!valid || url.hostname === 'localhost') {
+      return false;
+    }
+    const policy = Application.instance.storage.findPolicyByURL(url.href);
+    if (policy && policy.isSet) {
+      console.log(`Policy existing:`);
+      console.log(policy);
+      return false;
+    }
+    // generate UUID for this site and send it to [hostname]/CookiePolicyManager
+    const visitorId = policy ? policy.visitorId : uuid();
+    const visitedSite = url.href;
+    type ResponseType = {
+      visitorId: UUID;
+      scope: string;
+      purposes: { [key: string]: Object };
+    };
+    transmitJSON(url, { visitorId, visitedSite })
+      .then((response: ResponseType) => {
+        if (
+          !checkURL(response.scope).valid ||
+          !visitedSite.includes(response.scope)
+        ) {
+          // TODO Check that scope is at least website domain
+          console.error(
+            `Defined scope (${response.scope}) does not contain browsed URL (${visitedSite}) or is invalid!`,
+          );
+          return;
+        }
+        // Store in CookiePolicy
+        const item: ICookiePolicyItem = {
+          isSet: false,
+          url: url.origin,
+          scope: response.scope,
+          visitorId: visitorId,
+        };
+        Application.instance.storage.addOrUpdateCookiePolicyItem(item);
+
+        this.nativeCookieBannerWindow.webContents.send('cookieChannel', {
+          command: 'policy',
+          policy: response,
+          url: url,
+        });
+        console.log('Received Policy template from server.');
+      })
+      .catch((error) => {
+        console.log(error);
+      });
+    return true;
+  }
+
+  private addToJar(url: string, cookieEvent: CookieEvent): void {
+    if (!Object.keys(this.tempCookieJar).includes(url)) {
+      this.tempCookieJar[url] = [];
+    }
+    this.tempCookieJar[url].push(cookieEvent);
   }
 
   public get webContents() {

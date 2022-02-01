@@ -310,20 +310,22 @@ export class SessionsService {
     const extensionsPath = getPath('extensions');
     const dirs = await promises.readdir(extensionsPath);
 
-    for (const dir of dirs) {
-      try {
-        const path = resolve(extensionsPath, dir);
-        const extension = await context.loadExtension(path);
+    // for (const dir of dirs) {
+    //   try {
+    //     const path = resolve(extensionsPath, dir);
+    //     const extension = await context.loadExtension(path);
 
-        this.extensions.push(extension);
+    //     this.extensions.push(extension);
 
-        for (const window of Application.instance.windows.list) {
-          window.send('load-browserAction', extension);
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
+    //     console.log(`loaded extension from ${path}`);
+
+    //     for (const window of Application.instance.windows.list) {
+    //       window.send('load-browserAction', extension);
+    //     }
+    //   } catch (e) {
+    //     console.error(e);
+    //   }
+    // }
 
     /*if (session === 'incognito') {
       this.incognitoExtensionsLoaded = true;

@@ -13,6 +13,7 @@ import {
   IVisitedItem,
   IFavicon,
   IBookmark,
+  ICookiePolicyItem,
 } from '~/interfaces';
 import { countVisitedTimes } from '~/utils/history';
 import { promises } from 'fs';
@@ -50,7 +51,10 @@ export class StorageService {
     formfill: null,
     startupTabs: null,
     permissions: null,
+    cookiepolicy: null,
   };
+
+  public cookiePolicy: ICookiePolicyItem[] = [];
 
   public history: IHistoryItem[] = [];
 
@@ -216,6 +220,16 @@ export class StorageService {
     this.loadBookmarks();
     await this.loadFavicons();
     this.loadHistory();
+
+    this.loadCookiePolicy();
+  }
+
+  private async loadCookiePolicy() {
+    const items: ICookiePolicyItem[] = await this.find({
+      scope: 'cookiepolicy',
+      query: {},
+    });
+    this.cookiePolicy = items;
   }
 
   private async loadFavicons() {
@@ -505,4 +519,52 @@ ${other.join(breakTag)}
       console.error(err);
     }
   };
+
+  public async addOrUpdateCookiePolicyItem(
+    item: ICookiePolicyItem,
+  ): Promise<boolean> {
+    const existingItem = this.cookiePolicy.find(
+      (x) => x.visitorId === item.visitorId,
+    );
+    if (existingItem) {
+      // update
+      const index = this.cookiePolicy.indexOf(existingItem);
+      this.cookiePolicy[index] = { ...this.cookiePolicy[index], ...item };
+      await this.update({
+        scope: 'cookiepolicy',
+        query: { _id: existingItem._id },
+        value: item,
+      });
+      return true;
+    } else {
+      // add
+      const listItem = await this.insert<ICookiePolicyItem>({
+        scope: 'cookiepolicy',
+        item,
+      });
+      this.cookiePolicy.push(listItem);
+      return true;
+    }
+  }
+
+  public findPolicyByURL(url: string): ICookiePolicyItem {
+    // first run for direct hit on the primary url
+    const directPolicy = this.cookiePolicy.filter((x) => url.includes(x.url));
+    if (directPolicy.length > 0) {
+      return directPolicy[0];
+    }
+    // search for third party hits --- TODO
+    // const thirdPartyPolicy = this.cookiePolicy.filter((x) =>
+    //   x.thirdParty.some((y) => url.includes(y)),
+    // );
+    // if (thirdPartyPolicy.length > 0) {
+    //   return thirdPartyPolicy[0];
+    // }
+    return undefined;
+  }
+
+  public clearCookiePolicy(): Promise<number> {
+    this.cookiePolicy = [];
+    return this.remove({ scope: 'cookiepolicy', query: {}, multi: true });
+  }
 }

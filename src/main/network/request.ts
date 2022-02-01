@@ -39,3 +39,38 @@ export const requestURL = (url: string): Promise<ResponseDetails> =>
 
     req.end();
   });
+
+export const transmitJSON = (url: URL, data: Object): Promise<Object> =>
+  new Promise((resolve, reject) => {
+    let { request } = http;
+    const content = JSON.stringify(data);
+    const r = request(
+      {
+        host: url.hostname,
+        port: url.port,
+        path: '/CookiePolicyManager',
+        method: 'POST',
+        headers: { 'content-length': content.length },
+      },
+      function (response) {
+        const { statusCode } = response;
+        if (statusCode >= 300) {
+          reject(new Error(response.statusMessage));
+        }
+        const chunks: Uint8Array[] = [];
+        response.on('data', (chunk) => {
+          chunks.push(chunk);
+        });
+        response.on('end', () => {
+          const result = Buffer.concat(chunks).toString();
+          if (result.length > 0) {
+            resolve(JSON.parse(result));
+          } else {
+            resolve({});
+          }
+        });
+      },
+    );
+    r.write(content);
+    r.end();
+  });
