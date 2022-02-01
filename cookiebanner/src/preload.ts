@@ -1,13 +1,20 @@
-const ipc = require('electron').ipcRenderer;
-let loaded = false;
-let issuer = -1;
-let checkboxIds = [];
-let url = undefined;
+import { ipcRenderer as ipc } from 'electron';
+
+let loaded: boolean = false;
+let issuer: number = -1;
+let checkboxIds: string[] = [];
+// let url: URL = undefined;
 let visitorId = '';
+
+type Purpose = { name: string; description: string; descriptionLegal: string };
 
 const POLICY_PREFIX = 'policy-';
 
-function createHTML(tag, attrs = undefined, text = undefined) {
+function createHTML(
+  tag: string,
+  attrs?: { [k: string]: string },
+  text?: string,
+): HTMLElement {
   const out = document.createElement(tag);
   if (text !== undefined) {
     const txt = document.createTextNode(text);
@@ -21,7 +28,7 @@ function createHTML(tag, attrs = undefined, text = undefined) {
   return out;
 }
 
-window.onbeforeunload = (e) => {
+window.onbeforeunload = (e: BeforeUnloadEvent) => {
   // prevent window from being closed by decorations
   e.preventDefault();
   issuer = -1;
@@ -32,19 +39,18 @@ window.onbeforeunload = (e) => {
 window.addEventListener('DOMContentLoaded', () => {
   if (!loaded) {
     document.getElementById('submit-btn').addEventListener('click', (e) => {
-      if (url === undefined || issuer < 0 || visitorId === '') {
-        console.error('URL or issuer or visitorId undefined');
+      if (issuer < 0 || visitorId === '') {
+        console.error('issuer or visitorId undefined');
         return;
       }
       console.log(`These are the settings: `);
-      const policyReturn = {};
+      const policyReturn: { [checkId: string]: boolean } = {};
       for (const checkId of checkboxIds) {
-        console.log(`${checkId}: ${document.getElementById(checkId).checked}`);
-        policyReturn[
-          checkId.replace(POLICY_PREFIX, '')
-        ] = document.getElementById(checkId).checked;
+        const checked = (document.getElementById(checkId) as HTMLInputElement)
+          .checked;
+        console.log(`${checkId}: ${checked}`);
+        policyReturn[checkId.replace(POLICY_PREFIX, '')] = checked;
       }
-      // console.error(url);
       ipc.send('policy-choice', { issuer, visitorId, policyReturn });
 
       // close window after submission
@@ -61,7 +67,10 @@ window.addEventListener('DOMContentLoaded', () => {
     ipc.on('cookieChannel', (evt, arg) => {
       // arg: {command: string, [issuer/response]: Object}
       if (typeof arg === 'object' && typeof arg['command'] === 'string') {
-        document.getElementById('policy-container').replaceChildren();
+        // remove the old dynamic content before displayin the new one
+        document
+          .getElementById('policy-container')
+          .childNodes.forEach((e) => e.remove());
         if (arg['command'] === 'issuer') {
           issuer = arg['issuer'];
           console.log(`Cookie Channel Issuer: ${issuer}`);
@@ -72,7 +81,6 @@ window.addEventListener('DOMContentLoaded', () => {
           ).innerHTML = JSON.stringify(arg['response'], null, 2);
         } else if (arg['command'] === 'policy') {
           // Create HTML for displaying the policy
-          url = arg['url'];
           visitorId = arg['policy']['visitorId'];
           const visitorIdP = createHTML(
             'p',
@@ -82,7 +90,9 @@ window.addEventListener('DOMContentLoaded', () => {
           document.getElementById('policy-container').appendChild(visitorIdP);
 
           const policyList = createHTML('ul', { className: 'policy-list' });
-          for (const [k, v] of Object.entries(arg['policy']['purposes'])) {
+          for (const [k, v] of Object.entries<Purpose>(
+            arg['policy']['purposes'],
+          )) {
             const policyListEntry = createHTML('li', {
               className: 'policy-list-entry',
             });
@@ -98,7 +108,7 @@ window.addEventListener('DOMContentLoaded', () => {
             const label = createHTML(
               'label',
               { for: checkbox.id },
-              `${k}: ${v['name']}`,
+              `${k}: ${v.name}`,
             );
             policyListEntry.appendChild(label);
             policyList.appendChild(policyListEntry);

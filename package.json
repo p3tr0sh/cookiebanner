@@ -22,11 +22,11 @@
     "url": "https://github.com/wexond/wexond/issues"
   },
   "scripts": {
-    "build-injection": "webpack --config webpack.config.inject.js",
+    "build-banner": "webpack --config webpack.config.cookiebanner.js",
     "dev-renderer": "cross-env DEV=1 webpack serve --config webpack.config.renderer.js",
     "dev-webpack": "cross-env DEV=1 webpack",
     "build-renderer": "webpack --config webpack.config.renderer.js",
-    "dev": "npm run build-injection && cross-env START=1 npm run watch",
+    "dev": "npm run build-banner && cross-env START=1 npm run watch",
     "build": "rimraf build && concurrently \"npm run build-renderer\" \"webpack\"",
     "ci-build": "node scripts/ci-build.js",
     "start": "electron .",

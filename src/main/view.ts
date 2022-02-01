@@ -165,11 +165,11 @@ export class View {
       title: 'Cookie Policy Manager',
       show: false,
       webPreferences: {
-        preload: join(app.getAppPath(), 'preload.js'),
+        preload: join(app.getAppPath(), 'cookiebanner', 'build', 'preload.js'),
       },
     });
     this.nativeCookieBannerWindow.loadFile(
-      join(app.getAppPath(), 'myBanner.html'),
+      join(app.getAppPath(), 'cookiebanner', 'res', 'banner.html'),
     );
     this.nativeCookieBannerWindow.once('ready-to-show', () => {
       this.nativeCookieBannerWindowReady = true;

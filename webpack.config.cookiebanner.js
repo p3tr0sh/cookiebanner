@@ -1,4 +1,4 @@
-// webpack.config.inject.js
+// webpack.config.cookiebanner.js
 
 const path = require('path');
 
@@ -12,7 +12,7 @@ module.exports = {
   devtool: dev ? 'inline-source-map' : false,
 
   entry: {
-    inject: './inject/src',
+    preload: './cookiebanner/src/preload.ts',
   },
 
   module: {
@@ -38,8 +38,16 @@ module.exports = {
     extensions: ['.tsx', '.ts', '.js'],
   },
 
+  externals: {
+    keytar: `require('keytar')`,
+    electron: 'require("electron")',
+    fs: 'require("fs")',
+    os: 'require("os")',
+    path: 'require("path")',
+  },
+
   output: {
     filename: '[name].js',
-    path: path.resolve(__dirname, 'inject', 'build'),
+    path: path.resolve(__dirname, 'cookiebanner', 'build'),
   },
 };
