@@ -145,6 +145,22 @@ export class View {
 
     const cookies = this.webContents.session.cookies;
 
+    cookies.addListener('changed', (event, cookie, cause, removed) => {
+      // console.log(cookie.domain);
+      var url = cookie.domain;
+      if (url.startsWith('.')) {
+        url = `www${url}`;
+      }
+      if (!url.startsWith('http')) {
+        url = `http://${url}`;
+      }
+      if (cookie.httpOnly) {
+        console.log(
+          `[HTTP only cookie] -- Cookie change: ${JSON.stringify(cookie)}`,
+        );
+      }
+    });
+
     ///////////////////// Proxy for BurpSuite /////////////////////
     // const proxyConfig: Electron.Config = {
     //   mode: 'fixed_servers',
@@ -262,23 +278,22 @@ export class View {
 
       // setup my HttpRequest to request CookiePolicyManager
       // try {
-      const showBanner = this.handleCookiePolicy();
+      const showBanner = await this.handleCookiePolicy();
       console.log(`Show banner? ${showBanner}`);
+
+      // This is how to clear the storage
+      // this.webContents.session.clearStorageData({
+      //   storages: ['cookies'],
+      //   origin: 'http://www.metal-hammer.de',
+      // });
 
       if (this.webContents.getURL() !== 'http://localhost:4444/newtab.html') {
         // search for __tcfapi, see view-preload.ts
         // this.send('tcfapi-grabber');
 
         // show cookie banner; TODO: only show when no policy present
-        if (this.nativeCookieBannerWindowReady) {
-          this.nativeCookieBannerWindow.show();
-          this.nativeCookieBannerWindow.webContents.openDevTools();
-          this.nativeCookieBannerWindow.webContents.send('cookieChannel', {
-            command: 'issuer',
-            issuer: this.webContents.id,
-          });
-          // } else {
-          //   console.log('Window not ready yet :(');
+        if (showBanner) {
+          this.openCookieBanner();
         }
       }
     });
@@ -361,7 +376,7 @@ export class View {
           ).url;
           let url: URL = checkURL(origin).url;
 
-          // Send choice to server
+          // Send choice to server TODO: remove visitorId here but still set cookie and rerequest
           transmitJSON(url, {
             policyReturn,
             visitorId,
@@ -377,6 +392,7 @@ export class View {
               this.webContents.reload();
             })
             .catch((error) => {
+              console.log('This is the Error:');
               console.log(error);
             });
         }
@@ -477,10 +493,10 @@ export class View {
   }
 
   /**
-   * chack for present policy and request one if necessary
+   * check for present policy and request one if necessary
    * @returns true if native cookie banner should be displayed
    */
-  private handleCookiePolicy(): boolean {
+  private async handleCookiePolicy(): Promise<boolean> {
     const { valid, url } = checkURL(this.webContents.getURL());
     if (!valid || url.hostname === 'localhost') {
       return false;
@@ -499,38 +515,55 @@ export class View {
       scope: string;
       purposes: { [key: string]: Object };
     };
-    transmitJSON(url, { visitorId, visitedSite })
-      .then((response: ResponseType) => {
-        if (
-          !checkURL(response.scope).valid ||
-          !visitedSite.includes(response.scope)
-        ) {
-          // TODO Check that scope is at least website domain
-          console.error(
-            `Defined scope (${response.scope}) does not contain browsed URL (${visitedSite}) or is invalid!`,
-          );
-          return;
-        }
-        // Store in CookiePolicy
-        const item: ICookiePolicyItem = {
-          isSet: false,
-          url: url.origin,
-          scope: response.scope,
-          visitorId: visitorId,
-        };
-        Application.instance.storage.addOrUpdateCookiePolicyItem(item);
+    const response: ResponseType = await transmitJSON(url, {
+      visitorId,
+      visitedSite,
+    });
+    if (!response) {
+      return false;
+    }
+    if (
+      !checkURL(response.scope).valid ||
+      !visitedSite.includes(response.scope)
+    ) {
+      // TODO Check that scope is at least website domain
+      console.error(
+        `Defined scope (${response.scope}) does not contain browsed URL (${visitedSite}) or is invalid!`,
+      );
+      return false;
+    }
+    // Store in CookiePolicy
+    const item: ICookiePolicyItem = {
+      isSet: false,
+      url: url.origin,
+      scope: response.scope,
+      visitorId: visitorId,
+    };
+    Application.instance.storage.addOrUpdateCookiePolicyItem(item);
+    // TODO: store policy in localStorage for later. requests new policies with version number
 
-        this.nativeCookieBannerWindow.webContents.send('cookieChannel', {
-          command: 'policy',
-          policy: response,
-          url: url,
-        });
-        console.log('Received Policy template from server.');
-      })
-      .catch((error) => {
-        console.log(error);
-      });
+    this.nativeCookieBannerWindow.webContents.send('cookieChannel', {
+      command: 'policy',
+      policy: response,
+    });
+    console.log('Received Policy template from server.');
+
     return true;
+  }
+
+  public openCookieBanner(toggle?: boolean) {
+    if (this.nativeCookieBannerWindowReady) {
+      if (toggle && this.nativeCookieBannerWindow.isVisible()) {
+        this.nativeCookieBannerWindow.hide();
+      } else {
+        this.nativeCookieBannerWindow.show();
+        this.nativeCookieBannerWindow.webContents.openDevTools();
+        this.nativeCookieBannerWindow.webContents.send('cookieChannel', {
+          command: 'issuer',
+          issuer: this.webContents.id,
+        });
+      }
+    }
   }
 
   public get webContents() {

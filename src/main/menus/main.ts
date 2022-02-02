@@ -187,6 +187,16 @@ export const getMainMenu = () => {
           },
           'Reload ignoring cache',
         ),
+        ...createMenuItem(
+          ['CmdOrCtrl+Shift+C'],
+          () => {
+            // TODO
+            Application.instance.windows.current.viewManager.selected.openCookieBanner(
+              true,
+            );
+          },
+          'Open Cookie Banner',
+        ),
       ],
     },
     {
