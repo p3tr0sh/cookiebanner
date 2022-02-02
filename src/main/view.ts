@@ -276,6 +276,7 @@ export class View {
       const showBanner = await this.handleCookiePolicy();
       console.log(`Show banner? ${showBanner}`);
 
+      // TODO: remove all unwanted cookies after page finished loading and user selected policy
       // This is how to clear the storage
       // this.webContents.session.clearStorageData({
       //   storages: ['cookies'],
@@ -372,16 +373,7 @@ export class View {
         // now set cookie with policy and re-request site to load cookies from server
         // TODO: set with expiration or load this cookie upon loading a website and then reload page
         // console.log(origin.scope);
-        const scope = checkURL(origin.scope);
-        cookies
-          .set({
-            url: scope.href,
-            domain: scope.hostname,
-            name: 'cookiepolicy',
-            value: generatePolicyString(origin),
-          })
-          .then(() => this.webContents.reload())
-          .catch((e) => console.log(`Error: ${e}`));
+        this.setPolicyCookie(origin);
       },
     );
 
@@ -478,6 +470,30 @@ export class View {
     });
   }
 
+  private isCookiePolicySet(domain: string): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      this.webContents.session.cookies
+        .get({ domain, name: 'cookiepolicy' })
+        .then((c) => {
+          resolve(c.length > 0);
+        })
+        .catch((r) => reject(r));
+    });
+  }
+
+  private setPolicyCookie(policy: ICookiePolicyItem) {
+    const scope = checkURL(policy.scope);
+    this.webContents.session.cookies
+      .set({
+        url: scope.href,
+        domain: scope.hostname,
+        name: 'cookiepolicy',
+        value: generatePolicyString(policy),
+      })
+      .then(() => this.webContents.reload())
+      .catch((e) => console.log(e));
+  }
+
   /**
    * check for present policy and request one if necessary
    * @returns true if native cookie banner should be displayed
@@ -492,7 +508,10 @@ export class View {
       console.log(
         `Policy existing: (maybe ask for newer version. expiration?)`,
       );
-      console.log(policy);
+      if (!(await this.isCookiePolicySet(url.hostname))) {
+        this.setPolicyCookie(policy);
+      }
+      // console.log(policy);
       return false;
     }
     // generate UUID for this site and send it to [hostname]/CookiePolicyManager
@@ -515,7 +534,7 @@ export class View {
     // Store in CookiePolicy
     const item: ICookiePolicyItem = { ...response, sourceUrl: url.origin };
     Application.instance.storage.addOrUpdateCookiePolicyItem(item);
-    // TODO: store policy in localStorage for later. requests new policies with version number
+    // TODO: requests new policies with version number
 
     this.nativeCookieBannerWindow.webContents.send('cookieChannel', {
       command: 'policy',
