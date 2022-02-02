@@ -277,7 +277,6 @@ export class View {
       );
 
       // setup my HttpRequest to request CookiePolicyManager
-      // try {
       const showBanner = await this.handleCookiePolicy();
       console.log(`Show banner? ${showBanner}`);
 
@@ -291,7 +290,6 @@ export class View {
         // search for __tcfapi, see view-preload.ts
         // this.send('tcfapi-grabber');
 
-        // show cookie banner; TODO: only show when no policy present
         if (showBanner) {
           this.openCookieBanner();
         }
@@ -522,13 +520,15 @@ export class View {
     if (!response) {
       return false;
     }
+    const { valid: scopeValid, url: scopeURL } = checkURL(response.scope);
+    // visited site has to be in scope; [scope has port] => vis.port === scp.port
     if (
-      !checkURL(response.scope).valid ||
-      !visitedSite.includes(response.scope)
+      !scopeValid ||
+      !url.hostname.endsWith(scopeURL.hostname) ||
+      (scopeURL.port && url.port !== scopeURL.port)
     ) {
-      // TODO Check that scope is at least website domain
       console.error(
-        `Defined scope (${response.scope}) does not contain browsed URL (${visitedSite}) or is invalid!`,
+        `Policy scope (${response.scope}) does not apply to browsed URL (${visitedSite}) or is invalid!`,
       );
       return false;
     }
