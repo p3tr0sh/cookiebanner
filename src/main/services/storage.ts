@@ -556,6 +556,9 @@ ${other.join(breakTag)}
   public findPolicyByURL(url: string): ICookiePolicyItem | undefined {
     // first run for direct hit on the primary url
     const visitedSite = checkURL(url);
+    if (!visitedSite) {
+      return undefined;
+    }
     const directPolicy = this.cookiePolicy.filter((x) =>
       matchesScope(visitedSite, checkURL(x.scope)),
     );
