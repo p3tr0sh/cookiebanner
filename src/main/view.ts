@@ -13,7 +13,14 @@ import {
 import { parse as parseUrl } from 'url';
 import { getViewMenu } from './menus/view';
 import { AppWindow } from './windows';
-import { IHistoryItem, IBookmark, ICookiePolicyItem } from '~/interfaces';
+import {
+  IHistoryItem,
+  IBookmark,
+  ICookiePolicyItem,
+  Purpose,
+  ServerPolicy,
+  generatePolicyString,
+} from '~/interfaces';
 import {
   ERROR_PROTOCOL,
   NETWORK_ERROR_HOST,
@@ -36,21 +43,10 @@ import { TCData, TCFWindow } from './tcfwindow';
 import { v4 as uuid } from 'uuid';
 import { request } from 'http';
 import { transmitJSON } from './network/request';
-import { UUID } from '~/utils';
+import { checkURL, matchesScope, UUID } from '~/utils';
 
 interface IAuthInfo {
   url: string;
-}
-
-function checkURL(urlString: string): { valid: boolean; url: URL } {
-  if (!urlString || urlString === '') {
-    return { valid: false, url: undefined };
-  }
-  // check scheme or prepend http
-  if (!urlString.includes('://')) {
-    urlString = `http://${urlString}`;
-  }
-  return { valid: true, url: new URL(urlString) };
 }
 
 export class View {
@@ -351,49 +347,41 @@ export class View {
         evt,
         arg: {
           issuer: number;
-          visitorId: UUID;
-          policyReturn: { [key: string]: boolean };
+          sourceUrl: string;
+          policyReturn: { [key: number]: boolean };
         },
       ) => {
-        const { issuer, visitorId, policyReturn } = arg;
-        if (issuer === this.webContents.id) {
-          // Save choice in database
-          const item: ICookiePolicyItem = {
-            visitorId,
-            purposes: policyReturn,
-            isSet: true,
-          };
-          Application.instance.storage.addOrUpdateCookiePolicyItem(item);
-
-          console.log('Successfully added entry to policy storage.');
-          const origin = (
-            await Application.instance.storage.findOne<ICookiePolicyItem>({
-              scope: 'cookiepolicy',
-              query: { visitorId },
-            })
-          ).url;
-          let url: URL = checkURL(origin).url;
-
-          // Send choice to server TODO: remove visitorId here but still set cookie and rerequest
-          transmitJSON(url, {
-            policyReturn,
-            visitorId,
-          })
-            .then(async () => {
-              console.log('Successfully transmitted user policy.');
-              // now set cookie with visitorId and re-request other cookies
-              await cookies.set({
-                url: origin,
-                name: 'visitorId',
-                value: visitorId,
-              });
-              this.webContents.reload();
-            })
-            .catch((error) => {
-              console.log('This is the Error:');
-              console.log(error);
-            });
+        const { issuer, sourceUrl, policyReturn } = arg;
+        if (issuer !== this.webContents.id) {
+          return;
         }
+        // Save choice in database
+        const item: ICookiePolicyItem = {
+          sourceUrl,
+          purposeChoice: policyReturn,
+        };
+        await Application.instance.storage.addOrUpdateCookiePolicyItem(item);
+
+        console.log('Successfully added entry to policy storage.');
+        const origin = await Application.instance.storage.findOne<ICookiePolicyItem>(
+          {
+            scope: 'cookiepolicy',
+            query: { sourceUrl },
+          },
+        );
+        // now set cookie with policy and re-request site to load cookies from server
+        // TODO: set with expiration or load this cookie upon loading a website and then reload page
+        // console.log(origin.scope);
+        const scope = checkURL(origin.scope);
+        cookies
+          .set({
+            url: scope.href,
+            domain: scope.hostname,
+            name: 'cookiepolicy',
+            value: generatePolicyString(origin),
+          })
+          .then(() => this.webContents.reload())
+          .catch((e) => console.log(`Error: ${e}`));
       },
     );
 
@@ -495,56 +483,44 @@ export class View {
    * @returns true if native cookie banner should be displayed
    */
   private async handleCookiePolicy(): Promise<boolean> {
-    const { valid, url } = checkURL(this.webContents.getURL());
-    if (!valid || url.hostname === 'localhost') {
+    const url = checkURL(this.webContents.getURL());
+    if (!url || url.hostname === 'localhost') {
       return false;
     }
     const policy = Application.instance.storage.findPolicyByURL(url.href);
-    if (policy && policy.isSet) {
-      console.log(`Policy existing:`);
+    if (policy) {
+      console.log(
+        `Policy existing: (maybe ask for newer version. expiration?)`,
+      );
       console.log(policy);
       return false;
     }
     // generate UUID for this site and send it to [hostname]/CookiePolicyManager
-    const visitorId = policy ? policy.visitorId : uuid();
     const visitedSite = url.href;
-    type ResponseType = {
-      visitorId: UUID;
-      scope: string;
-      purposes: { [key: string]: Object };
-    };
-    const response: ResponseType = await transmitJSON(url, {
-      visitorId,
+    const response: ServerPolicy = await transmitJSON(url, {
+      version: 0,
       visitedSite,
     });
     if (!response) {
       return false;
     }
-    const { valid: scopeValid, url: scopeURL } = checkURL(response.scope);
-    // visited site has to be in scope; [scope has port] => vis.port === scp.port
-    if (
-      !scopeValid ||
-      !url.hostname.endsWith(scopeURL.hostname) ||
-      (scopeURL.port && url.port !== scopeURL.port)
-    ) {
+    const scopeURL = checkURL(response.scope);
+    // visited site has to be in scope
+    if (!scopeURL || !matchesScope(url, scopeURL)) {
       console.error(
         `Policy scope (${response.scope}) does not apply to browsed URL (${visitedSite}) or is invalid!`,
       );
       return false;
     }
     // Store in CookiePolicy
-    const item: ICookiePolicyItem = {
-      isSet: false,
-      url: url.origin,
-      scope: response.scope,
-      visitorId: visitorId,
-    };
+    const item: ICookiePolicyItem = { ...response, sourceUrl: url.origin };
     Application.instance.storage.addOrUpdateCookiePolicyItem(item);
     // TODO: store policy in localStorage for later. requests new policies with version number
 
     this.nativeCookieBannerWindow.webContents.send('cookieChannel', {
       command: 'policy',
       policy: response,
+      sourceUrl: url.origin,
     });
     console.log('Received Policy template from server.');
 

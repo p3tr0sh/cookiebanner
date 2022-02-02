@@ -42,3 +42,21 @@ export const prefixHttp = (url: string): string => {
   url = url.trim();
   return url.includes('://') ? url : `http://${url}`;
 };
+
+export function checkURL(urlString: string): URL | undefined {
+  if (!urlString || urlString === '') {
+    return undefined;
+  }
+  // check scheme or prepend http
+  if (!urlString.includes('://')) {
+    urlString = `http://${urlString}`;
+  }
+  return new URL(urlString);
+}
+
+export function matchesScope(url: URL, scope: URL): boolean {
+  return (
+    url.hostname.endsWith(scope.hostname) &&
+    (!scope.port || url.port === scope.port)
+  );
+}

@@ -3,15 +3,21 @@ import { ipcRenderer as ipc } from 'electron';
 let loaded: boolean = false;
 let issuer: number = -1;
 let checkboxIds: string[] = [];
-let visitorId = '';
+let sourceUrl: string = undefined;
 
-type Purpose = { name: string; description: string; descriptionLegal: string };
+type Purpose = {
+  id: number;
+  name: string;
+  description: string;
+  descriptionLegal: string;
+};
 
 type CookieWrappingIssuer = { command: 'issuer'; issuer: number };
 type CookieWrappingResponse = { command: 'response'; response: object };
 type CookieWrappingPolicy = {
   command: 'policy';
-  policy: { visitorId: string; purposes: { [id: string]: Purpose } };
+  policy: { purposes: Purpose[] };
+  sourceUrl: string;
 };
 type CookieWrapping =
   | CookieWrappingIssuer
@@ -49,19 +55,19 @@ window.onbeforeunload = (e: BeforeUnloadEvent) => {
 window.addEventListener('DOMContentLoaded', () => {
   if (!loaded) {
     document.getElementById('submit-btn').addEventListener('click', (e) => {
-      if (issuer < 0 || visitorId === '') {
-        console.error('issuer or visitorId undefined');
+      if (issuer < 0 || !sourceUrl) {
+        console.error('issuer or source undefined');
         return;
       }
       console.log(`These are the settings: `);
-      const policyReturn: { [checkId: string]: boolean } = {};
+      const policyReturn: { [checkId: number]: boolean } = {};
       for (const checkId of checkboxIds) {
         const checked = (document.getElementById(checkId) as HTMLInputElement)
           .checked;
         console.log(`${checkId}: ${checked}`);
-        policyReturn[checkId.replace(POLICY_PREFIX, '')] = checked;
+        policyReturn[Number(checkId.replace(POLICY_PREFIX, ''))] = checked;
       }
-      ipc.send('policy-choice', { issuer, visitorId, policyReturn });
+      ipc.send('policy-choice', { issuer, sourceUrl, policyReturn });
 
       // close window after submission
       ipc.send('cookie-window', 'close');
@@ -93,23 +99,19 @@ window.addEventListener('DOMContentLoaded', () => {
         console.log('policy');
         containerDiv.innerHTML = '';
         // Create HTML for displaying the policy
-        visitorId = arg.policy.visitorId;
-        const visitorIdP = createHTML(
-          'p',
-          undefined,
-          `Visitor ID: ${visitorId}`,
-        );
-        containerDiv.appendChild(visitorIdP);
+        sourceUrl = arg.sourceUrl;
+        const headline = createHTML('h3', undefined, `URL: ${sourceUrl}`);
+        containerDiv.appendChild(headline);
 
         const policyList = createHTML('ul', { className: 'policy-list' });
-        for (const [k, v] of Object.entries(arg.policy.purposes)) {
+        for (const purpose of arg.policy.purposes) {
           const policyListEntry = createHTML('li', {
             className: 'policy-list-entry',
           });
 
           const checkbox = createHTML('input', {
             type: 'checkbox',
-            id: `${POLICY_PREFIX}${k}`,
+            id: `${POLICY_PREFIX}${purpose.id}`,
           });
           // Collect ids to read out the values later
           checkboxIds.push(checkbox.id);
@@ -118,7 +120,7 @@ window.addEventListener('DOMContentLoaded', () => {
           const label = createHTML(
             'label',
             { for: checkbox.id },
-            `${k}: ${v.name}`,
+            `${purpose.id}: ${purpose.name}; ${purpose.description}`,
           );
           policyListEntry.appendChild(label);
           policyList.appendChild(policyListEntry);

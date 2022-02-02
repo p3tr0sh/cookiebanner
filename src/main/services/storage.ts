@@ -3,7 +3,7 @@ import * as Datastore from 'nedb';
 import { fromBuffer } from 'file-type';
 import * as icojs from 'icojs';
 
-import { getPath } from '~/utils';
+import { checkURL, getPath, matchesScope } from '~/utils';
 import {
   IFindOperation,
   IInsertOperation,
@@ -20,6 +20,7 @@ import { promises } from 'fs';
 import { Application } from '../application';
 import { requestURL } from '../network/request';
 import * as parse from 'node-bookmarks-parser';
+import { newUrlFromBase } from 'electron-updater';
 
 interface Databases {
   [key: string]: Datastore;
@@ -524,7 +525,7 @@ ${other.join(breakTag)}
     item: ICookiePolicyItem,
   ): Promise<boolean> {
     const existingItem = this.cookiePolicy.find(
-      (x) => x.visitorId === item.visitorId,
+      (x) => x.sourceUrl === item.sourceUrl,
     );
     if (existingItem) {
       // update
@@ -547,19 +548,21 @@ ${other.join(breakTag)}
     }
   }
 
-  public findPolicyByURL(url: string): ICookiePolicyItem {
+  /**
+   * Find the best fitting policy for the given site
+   * @param url visited site to match the scope against
+   * @returns policy with most fitting scope or undefined
+   */
+  public findPolicyByURL(url: string): ICookiePolicyItem | undefined {
     // first run for direct hit on the primary url
-    const directPolicy = this.cookiePolicy.filter((x) => url.includes(x.url));
+    const visitedSite = checkURL(url);
+    const directPolicy = this.cookiePolicy.filter((x) =>
+      matchesScope(visitedSite, checkURL(x.scope)),
+    );
     if (directPolicy.length > 0) {
+      // TODO: return longest match
       return directPolicy[0];
     }
-    // search for third party hits --- TODO
-    // const thirdPartyPolicy = this.cookiePolicy.filter((x) =>
-    //   x.thirdParty.some((y) => url.includes(y)),
-    // );
-    // if (thirdPartyPolicy.length > 0) {
-    //   return thirdPartyPolicy[0];
-    // }
     return undefined;
   }
 
