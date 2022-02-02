@@ -42,36 +42,6 @@ interface IAuthInfo {
   url: string;
 }
 
-type CookieEvent = {
-  event: Event;
-  cookie: Cookie;
-  cause: 'explicit' | 'overwrite' | 'expired' | 'evicted' | 'expired-overwrite';
-  removed: boolean;
-};
-
-type TempCookieJar = {
-  [url: string]: CookieEvent[];
-};
-
-const activationCookie: CookiesSetDetails = {
-  url: 'http://localhost',
-  name: 'myActivationCookie',
-  value: 'useTempJar',
-};
-const deactivationCookie: CookiesSetDetails = {
-  url: 'http://localhost',
-  name: 'myActivationCookie',
-  value: 'dontUseTempJar',
-};
-
-function checkCookie(cookie: Cookie, activation: CookiesSetDetails): boolean {
-  return (
-    activation.url.includes(cookie.domain) &&
-    cookie.name === activation.name &&
-    cookie.value === activation.value
-  );
-}
-
 function checkURL(urlString: string): { valid: boolean; url: URL } {
   if (!urlString || urlString === '') {
     return { valid: false, url: undefined };
@@ -115,8 +85,6 @@ export class View {
 
   private lastUrl = '';
 
-  private tempCookieJar: TempCookieJar = {};
-  private useTempJar: boolean = false;
   private nativeCookieBannerWindow: BrowserWindow;
   private nativeCookieBannerWindowReady = false;
 
@@ -176,95 +144,6 @@ export class View {
     });
 
     const cookies = this.webContents.session.cookies;
-    // cookies.removeAllListeners();
-    // cookies.addListener('changed', (event, cookie, cause, removed) => {
-    //   // console.log(cookie.domain);
-    //   var url = cookie.domain;
-    //   if (url.startsWith('.')) {
-    //     url = `www${url}`;
-    //   }
-    //   if (!url.startsWith('http')) {
-    //     url = `http://${url}`;
-    //   }
-    //   console.log(`Cookie change cause: ${cause}`);
-
-    //   // this.tempCookieJar.emit('changed', event, cookie, cause, removed);
-    //   // cookies
-    //   //   .set({ url, name: cookie.name, value: cookie.value })
-    //   //   .then(() => {
-    //   //     console.log('done');
-    //   //   })
-    //   //   .catch((r) => {
-    //   //     console.log(r);
-    //   //   });
-    //   // deactivation
-    //   if (checkCookie(cookie, activationCookie)) {
-    //     console.log('activate JAR');
-    //     this.useTempJar = true;
-    //   } else if (checkCookie(cookie, deactivationCookie)) {
-    //     console.log('deactivate JAR');
-    //     this.useTempJar = false;
-    //   } else {
-    //     if (this.useTempJar) {
-    //       // cookies
-    //       //   .remove(url, cookie.name)
-    //       //   .then(() => {
-    //       //     console.log(`removed ${cookie.name} from ${cookie.domain}`);
-    //       //   })
-    //       //   .catch((r) => {
-    //       //     console.log(r);
-    //       //   });
-    //       // cookies.flushStore();
-    //       this.addToJar(url, { event, cookie, cause, removed });
-    //       this.webContents.session.clearStorageData({ storages: ['cookies'] });
-    //     }
-    //   }
-    //   // console.log(JSON.stringify(this.tempCookieJar, null, 2));
-    // });
-
-    // this.webContents.session.cookies.addListener(
-    //   'changed',
-    //   (event, cookie, cause, removed) => {
-    //     console.log(
-    //       `Cookies changed: \nEvent: ${JSON.stringify(
-    //         event,
-    //       )}\nCookie: ${JSON.stringify(cookie)}\nCause: ${JSON.stringify(
-    //         cause,
-    //       )}\nRemoved: ${removed}`,
-    //     );
-    //     if (!removed) {
-    //       cookies.removeAllListeners()
-    //       this.webContents.session.cookies
-    //         .set({
-    //           url: cookie.domain,
-    //           name: cookie.name,
-    //           value: '',
-    //         })
-    //         .then(() => {
-    //           console.log(`reset ${cookie.} :: ${cookie.name}`);
-    //         })
-    //         .catch((reason) => {
-    //           console.log(`ERROR: ${reason}`);
-    //         });
-    //       // this.webContents.session.cookies
-    //       //   .remove(cookie.domain, cookie.name)
-    //       //   .then((v) => {
-    //       //     this.webContents.session.cookies
-    //       //       .get({ url: cookie.domain, name: cookie.name })
-    //       //       .then((v) => {
-    //       //         console.log(v);
-    //       //       });
-    //       //   })
-    //       //   .catch((r) => {
-    //       //     console.log('error: ', r);
-    //       //   });
-    //       this.webContents.session.cookies.flushStore().catch((r) => {
-    //         console.log(`could not flush: ${r}`);
-    //       });
-    //     }
-    //     console.log('');
-    //   },
-    // );
 
     ///////////////////// Proxy for BurpSuite /////////////////////
     // const proxyConfig: Electron.Config = {
@@ -386,48 +265,6 @@ export class View {
       const showBanner = this.handleCookiePolicy();
       console.log(`Show banner? ${showBanner}`);
 
-      // if (this.useTempJar) {
-      // console.log('clearing browser cookies. Before:');
-      // (await this.webContents.session.cookies.get({})).forEach((v) =>
-      //   console.log(`${v.domain}: ${v.name}=${v.value}`),
-      // );
-      // console.log('\n\nJAR before:');
-      // Object.entries(this.tempCookieJar).forEach(([k, v]) =>
-      //   v.forEach((evt) =>
-      //     console.log(
-      //       `${k}: ${evt.cookie.domain} :: ${evt.cookie.name}=${evt.cookie.value}`,
-      //     ),
-      //   ),
-      // );
-      // console.log('\n\n\n');
-      // // cookies
-      // //   .set(deactivationCookie)
-      // //   .then(() => {
-      // this.webContents.session.clearStorageData({
-      //   storages: ['cookies'],
-      //   origin: 'http://www.metal-hammer.de',
-      // });
-      // })
-      // .catch((r) => {
-      //   console.log(r);
-      // })
-      // .finally(async () => {
-      //   cookies.set(activationCookie);
-      // console.log('\n\n\nSession after');
-      // (await this.webContents.session.cookies.get({})).forEach((v) =>
-      //   console.log(`${v.domain}: ${v.name}=${v.value}`),
-      // );
-      // console.log('\n\nJAR after:');
-      // Object.entries(this.tempCookieJar).forEach(([k, v]) =>
-      //   v.forEach((evt) =>
-      //     console.log(
-      //       `${k}: ${evt.cookie.domain} :: ${evt.cookie.name}=${evt.cookie.value}`,
-      //     ),
-      //   ),
-      // );
-      // });
-      // }
-
       if (this.webContents.getURL() !== 'http://localhost:4444/newtab.html') {
         // search for __tcfapi, see view-preload.ts
         // this.send('tcfapi-grabber');
@@ -444,22 +281,6 @@ export class View {
           //   console.log('Window not ready yet :(');
         }
       }
-
-      // inject my js window
-      // readFile(
-      //   join(app.getAppPath(), 'inject/build/inject.js'),
-      //   'utf-8',
-      //   (err, data) => {
-      //     // console.log( );
-      //     console.log('reading file...');
-      //     this.cookieNomster = data;
-      //     if (err) console.log(err, data);
-      //   },
-      // );
-      // await this.webContents.executeJavaScript(this.cookieNomster);
-
-      // console.log(result);
-      //console.log('executed script');
     });
 
     ipcMain.on('cookie-window', (evt, arg) => {
@@ -710,13 +531,6 @@ export class View {
         console.log(error);
       });
     return true;
-  }
-
-  private addToJar(url: string, cookieEvent: CookieEvent): void {
-    if (!Object.keys(this.tempCookieJar).includes(url)) {
-      this.tempCookieJar[url] = [];
-    }
-    this.tempCookieJar[url].push(cookieEvent);
   }
 
   public get webContents() {
