@@ -1,14 +1,19 @@
+import { Flavor } from '~/utils';
+
+type PurposeId = Flavor<number, 'PurposeId'>;
+type ThirdPartyId = Flavor<number, 'ThirdPartyId'>;
+
 type Purpose = {
-  id: number;
+  id: PurposeId;
   name: string;
   description: string;
   descriptionLegal: string;
 };
 
 type ThirdParty = {
-  id: number;
+  id: ThirdPartyId;
   name: string;
-  purposes: number[];
+  purposes: PurposeId[];
   scope: string;
 };
 
@@ -19,18 +24,26 @@ type ServerPolicy = {
   thirdParties: ThirdParty[];
 };
 
-type ICookiePolicyItem = {
+type ICookiePolicyNotSupportedItem = {
   _id?: string;
   sourceUrl: string;
-  // version?: string;
-  // scope?: string;
-  // purposes?: Purpose[];
-  purposeChoice?: { [key: number]: boolean };
-  // thirdParties?: ThirdParty[];
-  thirdPartyChoice?: { [key: number]: boolean };
+  state: 'unsupported';
+};
+
+// TODO: model first party and third parties as CookieAccessors
+type ICookiePolicySupportedItem = {
+  _id?: string;
+  sourceUrl: string;
+  state: 'selected' | 'not-selected';
+  purposeChoice?: { [key: PurposeId]: boolean };
+  thirdPartyChoice?: { [key: ThirdPartyId]: boolean };
 } & Partial<ServerPolicy>;
 
-function generatePolicyString(policy: ICookiePolicyItem): string {
+type ICookiePolicyItem =
+  | ICookiePolicyNotSupportedItem
+  | ICookiePolicySupportedItem;
+
+function generatePolicyString(policy: ICookiePolicySupportedItem): string {
   return JSON.stringify({
     version: policy.version,
     purposeChoice: policy.purposeChoice,
@@ -38,10 +51,36 @@ function generatePolicyString(policy: ICookiePolicyItem): string {
   });
 }
 
+class PolicyNotSetError extends Error {
+  constructor() {
+    super(
+      'PolicyNotSetError: Nothing to worry about. Page will be reloaded with policy in place.',
+    );
+    Object.setPrototypeOf(this, PolicyNotSetError.prototype);
+  }
+}
+
+class PolicyNotFoundError extends Error {
+  constructor() {
+    super('PolicyNotFoundError: Requested policy is not in the local storage');
+    Object.setPrototypeOf(this, PolicyNotFoundError.prototype);
+  }
+}
+
+class PolicyServiceNotProvidedError extends Error {
+  constructor() {
+    super('Policy service is not provided by this server.');
+    Object.setPrototypeOf(this, PolicyServiceNotProvidedError.prototype);
+  }
+}
+
 export {
   Purpose,
   ThirdParty,
   ICookiePolicyItem,
   ServerPolicy,
+  PolicyNotSetError,
+  PolicyNotFoundError,
+  PolicyServiceNotProvidedError,
   generatePolicyString,
 };

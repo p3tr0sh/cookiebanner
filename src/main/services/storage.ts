@@ -21,6 +21,7 @@ import { Application } from '../application';
 import { requestURL } from '../network/request';
 import * as parse from 'node-bookmarks-parser';
 import { newUrlFromBase } from 'electron-updater';
+import { Cookie } from 'electron/main';
 
 interface Databases {
   [key: string]: Datastore;
@@ -559,14 +560,36 @@ ${other.join(breakTag)}
     if (!visitedSite) {
       return undefined;
     }
-    const directPolicy = this.cookiePolicy.filter((x) =>
-      matchesScope(visitedSite, checkURL(x.scope)),
+    const directPolicy = this.cookiePolicy.filter(
+      (x) =>
+        (x.state !== 'unsupported' &&
+          matchesScope(visitedSite, checkURL(x.scope))) ||
+        (x.state === 'unsupported' &&
+          matchesScope(visitedSite, checkURL(x.sourceUrl))),
     );
     if (directPolicy.length > 0) {
       // TODO: return longest match
       return directPolicy[0];
     }
     return undefined;
+  }
+
+  public isCookieAllowed(cookie: Cookie): boolean {
+    const domain = checkURL(cookie.domain);
+    if (!domain) {
+      return false;
+    }
+    // TODO only match on policy choice
+    return this.cookiePolicy.some(
+      (x) =>
+        x.state !== 'unsupported' &&
+        (matchesScope(domain, checkURL(x.scope)) ||
+          x.thirdParties.some(
+            (tp) =>
+              x.thirdPartyChoice[tp.id] &&
+              matchesScope(domain, checkURL(tp.scope)),
+          )),
+    );
   }
 
   public clearCookiePolicy(): Promise<number> {
