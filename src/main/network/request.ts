@@ -43,15 +43,15 @@ export const requestURL = (url: string): Promise<ResponseDetails> =>
 export const transmitJSON = <T>(url: URL, data: Object): Promise<T> =>
   new Promise((resolve, reject) => {
     let { request } = http;
-    if (url.protocol === 'https:') {
-      request = https.request;
-    }
+    // if (url.protocol === 'https:') {
+    //   request = https.request;
+    // }
     const content = JSON.stringify(data);
     const r = request(
       {
         host: url.hostname,
         port: url.port,
-        protocol: url.protocol,
+        // protocol: url.protocol,
         path: '/CookiePolicyManager',
         method: 'POST',
         headers: { 'content-length': content.length },
@@ -71,8 +71,9 @@ export const transmitJSON = <T>(url: URL, data: Object): Promise<T> =>
             try {
               resolve(JSON.parse(result));
             } catch (e) {
-              console.log(`THE transmitJSON RESULT: \n${result}`);
-              reject(e);
+              reject(
+                `Error: transmitJSON received non-JSON content: \n${result}`,
+              );
             }
           } else {
             resolve(undefined);
