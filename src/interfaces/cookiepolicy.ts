@@ -1,7 +1,7 @@
 import { Flavor } from '~/utils';
 
 type PurposeId = Flavor<number, 'PurposeId'>;
-type ThirdPartyId = Flavor<number, 'ThirdPartyId'>;
+type CookieAccessorId = Flavor<number, 'CookieAccessorId'>;
 
 type Purpose = {
   id: PurposeId;
@@ -10,8 +10,8 @@ type Purpose = {
   descriptionLegal: string;
 };
 
-type ThirdParty = {
-  id: ThirdPartyId;
+type CookieAccessor = {
+  id: CookieAccessorId;
   name: string;
   purposes: PurposeId[];
   scope: string;
@@ -21,7 +21,7 @@ type ServerPolicy = {
   scope: string;
   version: number;
   purposes: Purpose[];
-  thirdParties: ThirdParty[];
+  cookieAccessors: CookieAccessor[];
 };
 
 type ICookiePolicyNotSupportedItem = {
@@ -31,12 +31,15 @@ type ICookiePolicyNotSupportedItem = {
 };
 
 // TODO: model first party and third parties as CookieAccessors
+/**
+ * if purposeChoice is false, accessors depending on that purpose automatically get deactivated
+ */
 type ICookiePolicySupportedItem = {
   _id?: string;
   sourceUrl: string;
   state: 'selected' | 'not-selected';
   purposeChoice?: { [key: PurposeId]: boolean };
-  thirdPartyChoice?: { [key: ThirdPartyId]: boolean };
+  cookieAccessorChoice?: { [key: CookieAccessorId]: boolean };
 } & Partial<ServerPolicy>;
 
 type ICookiePolicyItem =
@@ -44,11 +47,8 @@ type ICookiePolicyItem =
   | ICookiePolicySupportedItem;
 
 function generatePolicyString(policy: ICookiePolicySupportedItem): string {
-  return JSON.stringify({
-    version: policy.version,
-    purposeChoice: policy.purposeChoice,
-    thirdPartyChoice: policy.thirdPartyChoice,
-  });
+  const { version, purposeChoice, cookieAccessorChoice } = policy;
+  return JSON.stringify({ version, purposeChoice, cookieAccessorChoice });
 }
 
 class PolicyNotSetError extends Error {
@@ -76,7 +76,7 @@ class PolicyServiceNotProvidedError extends Error {
 
 export {
   Purpose,
-  ThirdParty,
+  CookieAccessor,
   ICookiePolicyItem,
   ServerPolicy,
   PolicyNotSetError,

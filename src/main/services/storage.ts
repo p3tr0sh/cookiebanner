@@ -550,45 +550,60 @@ ${other.join(breakTag)}
   }
 
   /**
-   * Find the best fitting policy for the given site
+   * Find the best fitting policy for the given site.
+   * Also returns entries for blocked sites.
    * @param url visited site to match the scope against
    * @returns policy with most fitting scope or undefined
    */
   public findPolicyByURL(url: string): ICookiePolicyItem | undefined {
-    // first run for direct hit on the primary url
     const visitedSite = checkURL(url);
     if (!visitedSite) {
       return undefined;
     }
-    const directPolicy = this.cookiePolicy.filter(
+    const policies = this.cookiePolicy.filter(
       (x) =>
         (x.state !== 'unsupported' &&
           matchesScope(visitedSite, checkURL(x.scope))) ||
         (x.state === 'unsupported' &&
           matchesScope(visitedSite, checkURL(x.sourceUrl))),
     );
-    if (directPolicy.length > 0) {
-      // TODO: return longest match
-      return directPolicy[0];
+    if (policies.length > 0) {
+      // find longest match
+      let longestMatchId = 0;
+      let longestMatch = 0;
+      policies.forEach((policy, idx) => {
+        if (
+          policy.state !== 'unsupported' &&
+          policy.scope.length > longestMatch
+        ) {
+          longestMatch = policy.scope.length;
+          longestMatchId = idx;
+        }
+      });
+      return policies[longestMatchId];
     }
     return undefined;
   }
 
+  /**
+   * Search for a user-chosen policy that justifies that cookies existence.
+   * @param cookie
+   * @returns true if a policy exists
+   */
   public isCookieAllowed(cookie: Cookie): boolean {
     const domain = checkURL(cookie.domain);
     if (!domain) {
       return false;
     }
-    // TODO only match on policy choice
+    // search for accessors in user-selected policies
     return this.cookiePolicy.some(
       (x) =>
-        x.state !== 'unsupported' &&
-        (matchesScope(domain, checkURL(x.scope)) ||
-          x.thirdParties.some(
-            (tp) =>
-              x.thirdPartyChoice[tp.id] &&
-              matchesScope(domain, checkURL(tp.scope)),
-          )),
+        x.state === 'selected' &&
+        x.cookieAccessors.some(
+          (accessor) =>
+            x.cookieAccessorChoice[accessor.id] &&
+            matchesScope(domain, checkURL(accessor.scope)),
+        ),
     );
   }
 
