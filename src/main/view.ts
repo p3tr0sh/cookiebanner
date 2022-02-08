@@ -1,15 +1,4 @@
-import {
-  BrowserView,
-  app,
-  ipcMain,
-  Cookies,
-  Event,
-  Cookie,
-  CookiesSetDetails,
-  dialog,
-  BrowserWindow,
-  webFrame,
-} from 'electron';
+import { BrowserView, app, ipcMain, Cookie, BrowserWindow } from 'electron';
 import { parse as parseUrl } from 'url';
 import { getViewMenu } from './menus/view';
 import { AppWindow } from './windows';
@@ -17,7 +6,6 @@ import {
   IHistoryItem,
   IBookmark,
   ICookiePolicyItem,
-  Purpose,
   ServerPolicy,
   generatePolicyString,
   PolicyNotSetError,
@@ -40,13 +28,9 @@ import { Queue } from '~/utils/queue';
 import { Application } from './application';
 import { getUserAgentForURL } from './user-agent';
 
-import { readFile } from 'fs';
 import { join } from 'path';
-import { TCData, TCFWindow } from './tcfwindow';
-import { v4 as uuid } from 'uuid';
-import { request } from 'http';
 import { transmitJSON } from './network/request';
-import { checkURL, deepEqual, matchesScope, UUID } from '~/utils';
+import { checkURL, matchesScope, UUID } from '~/utils';
 
 interface IAuthInfo {
   url: string;
