@@ -24,23 +24,25 @@ type ServerPolicy = {
   cookieAccessors: CookieAccessor[];
 };
 
+type PolicyWithChoice = ServerPolicy & {
+  purposeChoice: { [key: PurposeId]: boolean };
+  cookieAccessorChoice: { [key: CookieAccessorId]: boolean };
+};
+
 type ICookiePolicyNotSupportedItem = {
   _id?: string;
   sourceUrl: string;
   state: 'unsupported';
 };
 
-// TODO: model first party and third parties as CookieAccessors
 /**
- * if purposeChoice is false, accessors depending on that purpose automatically get deactivated
+ * TODO: if purposeChoice is false, accessors depending on that purpose automatically get deactivated
  */
 type ICookiePolicySupportedItem = {
   _id?: string;
   sourceUrl: string;
   state: 'selected' | 'not-selected';
-  purposeChoice?: { [key: PurposeId]: boolean };
-  cookieAccessorChoice?: { [key: CookieAccessorId]: boolean };
-} & Partial<ServerPolicy>;
+} & Partial<PolicyWithChoice>;
 
 type ICookiePolicyItem =
   | ICookiePolicyNotSupportedItem
@@ -79,6 +81,7 @@ export {
   CookieAccessor,
   ICookiePolicyItem,
   ServerPolicy,
+  PolicyWithChoice,
   PolicyNotSetError,
   PolicyNotFoundError,
   PolicyServiceNotProvidedError,

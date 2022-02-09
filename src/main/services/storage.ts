@@ -601,6 +601,7 @@ ${other.join(breakTag)}
         x.state === 'selected' &&
         x.cookieAccessors.some(
           (accessor) =>
+            x.cookieAccessorChoice &&
             x.cookieAccessorChoice[accessor.id] &&
             matchesScope(domain, checkURL(accessor.scope)),
         ),

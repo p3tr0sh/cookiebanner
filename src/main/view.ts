@@ -11,6 +11,7 @@ import {
   PolicyNotSetError,
   PolicyServiceNotProvidedError,
   PolicyNotFoundError,
+  PolicyWithChoice,
 } from '~/interfaces';
 import {
   ERROR_PROTOCOL,
@@ -69,7 +70,6 @@ export class View {
   private lastUrl = '';
 
   private nativeCookieBannerWindow: BrowserWindow;
-  private nativeCookieBannerWindowReady = false;
   private cookiesBeforeLoading: Cookie[] = [];
 
   public constructor(window: AppWindow, url: string, incognito: boolean) {
@@ -109,23 +109,8 @@ export class View {
       },
     );
 
-    this.nativeCookieBannerWindow = new BrowserWindow({
-      parent: this.window.win,
-      // modal: true,
-      minimizable: false,
-      maximizable: false,
-      title: 'Cookie Policy Manager',
-      show: false,
-      webPreferences: {
-        preload: join(app.getAppPath(), 'cookiebanner', 'build', 'preload.js'),
-      },
-    });
-    this.nativeCookieBannerWindow.loadFile(
-      join('cookiebanner', 'res', 'banner.html'),
-    );
-    this.nativeCookieBannerWindow.once('ready-to-show', () => {
-      this.nativeCookieBannerWindowReady = true;
-    });
+    this.createBanner();
+    this.nativeCookieBannerWindow.destroy();
 
     const cookies = this.webContents.session.cookies;
 
@@ -298,22 +283,16 @@ export class View {
         });
     });
 
-    ipcMain.on(
-      'cookie-window',
-      (evt, arg: { issuer: number; action: 'close' | 'historyBack' }) => {
-        if (arg.issuer === this.webContents.id) {
-          if (arg.action === 'close') {
-            this.nativeCookieBannerWindow.hide();
-          } else if (arg.action === 'historyBack') {
-            if (this.webContents.canGoBack()) {
-              this.webContents.goBack();
-            } else {
-              this.webContents.loadURL(NEWTAB_URL);
-            }
-          }
+    ipcMain.on('banner-history-back', (_, arg: { issuer: number }) => {
+      if (arg.issuer === this.webContents.id) {
+        if (this.webContents.canGoBack()) {
+          this.webContents.goBack();
+        } else {
+          this.webContents.loadURL(NEWTAB_URL);
         }
-      },
-    );
+        this.nativeCookieBannerWindow.destroy();
+      }
+    });
 
     // send received TCData from the Content window to the Banner window
     ipcMain.on('tcdata', (evt, tcdata) => {
@@ -324,41 +303,37 @@ export class View {
     });
 
     // interaction with the cookie banner ///////////////////////////////////////////////
-    ipcMain.on(
-      'cookie-whitelist',
-      async (evt, arg: { issuer: number; cmd?: string }) => {
-        // This event is sent to all instances (tabs, windows) so we have to filter with the "issuer"
-        if (arg.issuer === this.webContents.id) {
-          if (arg.cmd === 'clear') {
-            await Application.instance.storage.clearCookiePolicy();
-            console.log('cleared');
-            this.webContents.reload();
-          } else {
-            console.log(`unknown command: "${arg.cmd}"`);
-          }
-        }
-      },
-    );
+    ipcMain.on('banner-clear-policies', async (_, arg: { issuer: number }) => {
+      if (arg.issuer === this.webContents.id) {
+        await Application.instance.storage.clearCookiePolicy();
+        console.log('cleared');
+        this.nativeCookieBannerWindow.destroy();
+        this.webContents.reload();
+      }
+    });
 
     ipcMain.on(
       'policy-choice',
       async (
-        evt,
+        _,
         arg: {
           issuer: number;
           sourceUrl: string;
-          policyReturn: { [key: number]: boolean };
+          policy: PolicyWithChoice;
         },
       ) => {
-        const { issuer, sourceUrl, policyReturn } = arg;
+        const { issuer, sourceUrl, policy } = arg;
         if (issuer !== this.webContents.id) {
           return;
         }
+        // close banner window
+        this.nativeCookieBannerWindow.destroy();
         // Save choice in database
         const item: ICookiePolicyItem = {
           state: 'selected',
           sourceUrl,
-          purposeChoice: policyReturn,
+          purposeChoice: policy.purposeChoice,
+          cookieAccessorChoice: policy.cookieAccessorChoice,
         };
         await Application.instance.storage.addOrUpdateCookiePolicyItem(item);
 
@@ -470,18 +445,13 @@ export class View {
     });
   }
 
-  private sendToBanner(command: 'message' | 'issuer' | 'policy') {
+  private sendToBanner(command: 'message' | 'policy') {
     if (command === 'message') {
-      this.nativeCookieBannerWindow.webContents.send('cookieChannel', {
-        command: 'message',
+      this.nativeCookieBannerWindow.webContents.send('banner-show', {
         issuer: this.webContents.id,
+        mode: 'message',
         headline: `Website does not support CookiePolicyManager`,
         message: `Your Browser can not control the privacy regarding cookies of the target website "${this.webContents.getURL()}".`,
-      });
-    } else if (command === 'issuer') {
-      this.nativeCookieBannerWindow.webContents.send('cookieChannel', {
-        command: 'issuer',
-        issuer: this.webContents.id,
       });
     } else if (command === 'policy') {
       const url = checkURL(this.webContents.getURL());
@@ -492,11 +462,11 @@ export class View {
       if (!policy) {
         throw new PolicyNotFoundError();
       }
-      this.nativeCookieBannerWindow.webContents.send('cookieChannel', {
-        command: 'policy',
-        policy: policy,
-        sourceUrl: url.origin,
+      this.nativeCookieBannerWindow.webContents.send('banner-show', {
         issuer: this.webContents.id,
+        mode: 'policy',
+        sourceUrl: url.origin,
+        policy,
       });
     }
   }
@@ -625,28 +595,54 @@ export class View {
     return true;
   }
 
-  public openCookieBanner(toggle?: boolean) {
-    if (this.nativeCookieBannerWindowReady) {
-      if (toggle && this.nativeCookieBannerWindow.isVisible()) {
-        this.nativeCookieBannerWindow.hide();
-      } else {
-        // decide what screen to show: message or policy
-        const policy = Application.instance.storage.findPolicyByURL(
-          this.webContents.getURL(),
-        );
-        if (!policy) {
-          console.log('No policy existing, not even Blacklist entry');
-          return;
-        }
-        if (policy.state !== 'unsupported') {
-          this.sendToBanner('policy');
-        } else {
-          this.sendToBanner('message');
-        }
-        this.nativeCookieBannerWindow.show();
-        this.nativeCookieBannerWindow.webContents.openDevTools();
-      }
+  private createBanner() {
+    if (
+      this.nativeCookieBannerWindow &&
+      !this.nativeCookieBannerWindow.isDestroyed()
+    ) {
+      this.nativeCookieBannerWindow.destroy();
     }
+    this.nativeCookieBannerWindow = new BrowserWindow({
+      parent: this.window.win,
+      // modal: true,
+      minimizable: false,
+      maximizable: false,
+      title: 'Cookie Policy Manager',
+      show: false,
+      webPreferences: {
+        preload: join(app.getAppPath(), 'cookiebanner', 'build', 'preload.js'),
+      },
+    });
+    this.nativeCookieBannerWindow.loadFile(
+      join('cookiebanner', 'res', 'banner.html'),
+    );
+  }
+
+  public openCookieBanner(toggle?: boolean) {
+    if (toggle && !this.nativeCookieBannerWindow.isDestroyed()) {
+      this.nativeCookieBannerWindow.destroy();
+      return;
+    }
+    this.createBanner();
+    // decide what screen to show: message or policy
+    const policy = Application.instance.storage.findPolicyByURL(
+      this.webContents.getURL(),
+    );
+    if (!policy) {
+      console.log('No policy existing, not even Blacklist entry');
+      return;
+    }
+    if (policy.state !== 'unsupported') {
+      this.sendToBanner('policy');
+    } else {
+      this.sendToBanner('message');
+    }
+    this.nativeCookieBannerWindow.show();
+    this.nativeCookieBannerWindow.webContents.openDevTools({
+      mode: 'detach',
+    });
+    // }
+    // }
   }
 
   public get webContents() {
