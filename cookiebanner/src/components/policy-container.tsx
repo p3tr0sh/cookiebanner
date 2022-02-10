@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import * as React from 'react';
 import { ipcRenderer as ipc } from 'electron';
 import { Policy } from 'src/util';
+import classNames from 'classnames';
 
-const POLICY_PREFIX = 'policy-';
-const ACCESSOR_PREFIX = 'accessor-';
+import styles from '../styles/banner.module.css';
 
 function replaceNewlines(text: string) {
   return (
@@ -84,31 +84,32 @@ export function PolicyContainer({
 
   return (
     <>
-      <h1 style={{ textAlign: 'center' }}>
+      <h1 className={styles.centering}>
         Cookie Policy for "{policy && policy.sourceUrl}"
       </h1>
       <div id="policy-container" style={style}>
-        <div style={{ flex: '50%' }}>
+        <div className={styles.column}>
           <h2>Purposes</h2>
-          <ul>
+          <ul className={styles.flexList}>
             {policy &&
               policy.purposes.map((purpose) => (
                 <li>
-                  <input
-                    type="checkbox"
-                    id={`${POLICY_PREFIX}${purpose.id}`}
-                    checked={
-                      policy.purposeChoice && policy.purposeChoice[purpose.id]
-                    }
-                    onChange={(e) => {
-                      changePurpose(purpose.id, e.target.checked);
-                    }}
-                  />
-                  <label htmlFor={`${POLICY_PREFIX}${purpose.id}`}>
-                    {purpose.id}
+                  <label className={styles.checkboxLabel}>
+                    <input
+                      type="checkbox"
+                      checked={
+                        policy.purposeChoice && policy.purposeChoice[purpose.id]
+                      }
+                      onChange={(e) => {
+                        changePurpose(purpose.id, e.target.checked);
+                      }}
+                    />
+                    <span className={styles.purposeId}>{purpose.id}</span>
                   </label>
-                  <details style={{ display: 'inline', marginLeft: '1em' }}>
-                    <summary>{purpose.description}</summary>
+                  <details className={styles.purposeDescription}>
+                    <summary className={styles.purposeSummary}>
+                      {purpose.description}
+                    </summary>
                     {replaceNewlines(purpose.descriptionLegal)}
                   </details>
                 </li>
@@ -121,25 +122,29 @@ export function PolicyContainer({
             &lt;Clear Whitelist&gt;
           </button>
         </div>
-        <div style={{ flex: '50%' }}>
+        <div className={styles.column}>
           <h2>Cookie Accessors</h2>
-          <ul>
+          <ul className={styles.flexList}>
             {policy &&
               policy.cookieAccessors.map((accessor) => (
                 <li>
-                  <input
-                    type="checkbox"
-                    id={`${ACCESSOR_PREFIX}${accessor.id}`}
-                    checked={
-                      policy.cookieAccessorChoice &&
-                      policy.cookieAccessorChoice[accessor.id]
-                    }
-                    onChange={(e) => {
-                      changeAccessor(accessor.id, e.target.checked);
-                    }}
-                    disabled={!isAccessorAvailable(accessor.id)}
-                  />
-                  <label htmlFor={`${ACCESSOR_PREFIX}${accessor.id}`}>
+                  <label
+                    className={classNames(
+                      styles.checkboxLabel,
+                      !isAccessorAvailable(accessor.id) && styles.disabled,
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={
+                        policy.cookieAccessorChoice &&
+                        policy.cookieAccessorChoice[accessor.id]
+                      }
+                      onChange={(e) => {
+                        changeAccessor(accessor.id, e.target.checked);
+                      }}
+                      disabled={!isAccessorAvailable(accessor.id)}
+                    />
                     "{accessor.name}" depends on purposes{' '}
                     {accessor.purposes.join(', ')}
                   </label>

@@ -6,15 +6,11 @@ const dev = process.env.DEV === '1';
 
 module.exports = {
   mode: dev ? 'development' : 'production',
-
   watch: dev,
-
   devtool: dev ? 'inline-source-map' : false,
-
   entry: {
     preload: './cookiebanner/src/preload.ts',
   },
-
   module: {
     rules: [
       {
@@ -30,6 +26,21 @@ module.exports = {
         test: /\.tsx?$/,
         use: 'ts-loader',
         exclude: /node_modules/,
+      },
+      {
+        test: /\.css$/i,
+        use: [
+          'style-loader',
+          {
+            loader: 'css-loader',
+            options: {
+              sourceMap: true,
+              modules: {
+                localIdentName: '[local]-[hash:base64:8]',
+              },
+            },
+          },
+        ],
       },
     ],
   },

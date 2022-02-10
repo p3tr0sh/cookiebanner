@@ -1,7 +1,7 @@
-import * as React from 'react';
+import { createElement } from 'react';
 import ReactDOM = require('react-dom');
-import { BannerWindow } from './components/banner-window';
 
-window.addEventListener('DOMContentLoaded', () => {
-  ReactDOM.render(React.createElement(BannerWindow), document.body);
+window.addEventListener('DOMContentLoaded', async () => {
+  const { BannerWindow } = await import('./components/banner-window');
+  ReactDOM.render(createElement(BannerWindow), document.body);
 });

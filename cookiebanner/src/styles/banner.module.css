@@ -1,0 +1,40 @@
+.centering {
+    text-align: center;
+}
+
+.flexList {
+    padding-left: 0px;
+}
+
+.flexList > li {
+    display: flex;
+    padding-bottom: 0.25rem;
+}
+
+.checkboxLabel {
+    white-space: nowrap;
+    display: inline-table;
+    width: 2.5rem;
+}
+
+.column {
+    flex: 50%;
+    padding: 0.5rem;
+}
+
+.purposeSummary {
+    font-style: normal;
+}
+
+.purposeDescription {
+    font-style: italic;
+}
+
+.purposeId {
+    font-weight: 600;
+}
+
+.disabled {
+    color: gray;
+    text-decoration: line-through;
+}

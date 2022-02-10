@@ -14,5 +14,5 @@
       "@ress/*": ["res/*"],
     },
   },
-  "include": ["./src/**/*.ts", "./res/**/*.json", "./src/**/*.tsx"],
+  "include": ["./src/**/*.ts", "./res/**/*.json", "./src/**/*.tsx", "./src/**/*.css"],
 }
