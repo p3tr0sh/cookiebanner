@@ -13,6 +13,7 @@ type CookieAccessor = {
 };
 
 type Policy = {
+  sourceUrl: string;
   purposes: Purpose[];
   purposeChoice?: { [purposeId: number]: boolean };
   cookieAccessors: CookieAccessor[];
