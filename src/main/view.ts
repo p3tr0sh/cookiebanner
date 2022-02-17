@@ -252,13 +252,6 @@ export class View {
         .then((showBanner) => {
           console.log(`Show banner? ${showBanner}`);
 
-          // TODO: remove all unwanted cookies after page finished loading and user selected policy
-          // This is how to clear the storage
-          // this.webContents.session.clearStorageData({
-          //   storages: ['cookies'],
-          //   origin: 'http://www.metal-hammer.de',
-          // });
-
           // search for __tcfapi, see view-preload.ts
           // this.send('tcfapi-grabber');
 
@@ -308,7 +301,7 @@ export class View {
         await Application.instance.storage.clearCookiePolicy();
         console.log('cleared');
         this.nativeCookieBannerWindow.destroy();
-        this.webContents.reload();
+        // this.webContents.reload();
       }
     });
 
@@ -477,20 +470,32 @@ export class View {
     for (const cookie of allCookies) {
       if (!Application.instance.storage.isCookieAllowed(cookie)) {
         const origin = checkURL(cookie.domain).origin;
-        origins.add(origin);
+        if (cookie.name !== 'cookiepolicy') {
+          origins.add(origin);
+        }
       }
     }
 
+    let reload = false;
     for (const origin of origins) {
-      this.webContents.session
-        .clearStorageData({
-          storages: ['cookies'],
-          origin,
-        })
-        .then(() => {
-          console.log(`Removed Cookies from ${origin}`);
-        })
-        .catch((r) => console.log(r));
+      await this.webContents.session.clearStorageData({
+        storages: ['cookies'],
+        origin,
+      });
+      console.log(`Removed Cookies from ${origin}`);
+      // Re-set policy cookie if existing
+      try {
+        await this.setPolicyCookieFromStorage(checkURL(origin));
+      } catch (e) {
+        if (e instanceof PolicyNotSetError) {
+          reload = true;
+        } else if (!(e instanceof PolicyNotFoundError)) {
+          throw e;
+        }
+      }
+    }
+    if (reload) {
+      this.webContents.reload();
     }
   }
 
@@ -518,16 +523,7 @@ export class View {
     });
   }
 
-  /**
-   * check for present policy and request one if necessary
-   * @param urlString defaults to the currently loaded site
-   * @returns true if native cookie banner should be displayed
-   */
-  private async handleCookiePolicy(): Promise<boolean> {
-    const url = checkURL(this.webContents.getURL());
-    if (!url || url.hostname === 'localhost') {
-      return false;
-    }
+  private async setPolicyCookieFromStorage(url: URL): Promise<boolean> {
     const policy = Application.instance.storage.findPolicyByURL(url.href);
     if (policy) {
       console.log(
@@ -549,6 +545,27 @@ export class View {
       }
       // console.log(policy);
       return false;
+    }
+    throw new PolicyNotFoundError();
+  }
+
+  /**
+   * check for present policy and request one if necessary
+   * @param urlString defaults to the currently loaded site
+   * @returns true if native cookie banner should be displayed
+   */
+  private async handleCookiePolicy(): Promise<boolean> {
+    const url = checkURL(this.webContents.getURL());
+    if (!url || url.hostname === 'localhost') {
+      return false;
+    }
+    try {
+      const showBanner = await this.setPolicyCookieFromStorage(url);
+      return showBanner;
+    } catch (e) {
+      if (!(e instanceof PolicyNotFoundError)) {
+        throw e;
+      }
     }
     // request policy from [hostname]/CookiePolicyManager, save it and show banner
     const visitedSite = url.href;
@@ -583,13 +600,7 @@ export class View {
       sourceUrl: url.origin,
       state: 'not-selected',
     };
-    Application.instance.storage
-      .addOrUpdateCookiePolicyItem(item)
-      .then(() => {
-        // this.sendToBanner('policy');
-        console.log('Received Policy template from server.');
-      })
-      .catch((r) => console.log(`Could not set policy: ${r}`));
+    await Application.instance.storage.addOrUpdateCookiePolicyItem(item);
     // TODO: requests new policies with version number
 
     return true;
