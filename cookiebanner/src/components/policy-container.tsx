@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import * as React from 'react';
 import { ipcRenderer as ipc } from 'electron';
-import { Policy } from 'src/util';
+import { Policy, Purpose } from 'src/util';
 import classNames from 'classnames';
 
 import styles from '../styles/banner.module.css';
@@ -65,8 +65,19 @@ export function PolicyContainer({
   }
 
   function isAccessorAvailable(id: number): boolean {
-    return policy.cookieAccessors[id].purposes.every(
-      (pid) => policy.purposeChoice[pid],
+    return (
+      policy &&
+      policy.cookieAccessors &&
+      policy.purposeChoice &&
+      policy.cookieAccessors[id].purposes.every(
+        (pid) => policy.purposeChoice[pid],
+      )
+    );
+  }
+
+  function isPurposeNeeded(purpose: Purpose): boolean {
+    return policy.cookieAccessors.some((accessor) =>
+      accessor.purposes.includes(purpose.id),
     );
   }
 
@@ -92,7 +103,7 @@ export function PolicyContainer({
           <h2>Purposes</h2>
           <ul className={styles.flexList}>
             {policy &&
-              policy.purposes.map((purpose) => (
+              policy.purposes.filter(isPurposeNeeded).map((purpose) => (
                 <li>
                   <label className={styles.checkboxLabel}>
                     <input
