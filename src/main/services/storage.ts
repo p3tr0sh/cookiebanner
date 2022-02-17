@@ -525,21 +525,51 @@ ${other.join(breakTag)}
   public async addOrUpdateCookiePolicyItem(
     item: ICookiePolicyItem,
   ): Promise<boolean> {
+    const emptyPurposeChoice =
+      item.state !== 'unsupported' &&
+      item.purposes &&
+      item.purposes.reduce<Record<number, boolean>>(
+        (r, purpose) => ({ ...r, [purpose.id]: false }),
+        {},
+      );
+    const emptyAccessorChoice =
+      item.state !== 'unsupported' &&
+      item.purposes &&
+      item.cookieAccessors.reduce<Record<number, boolean>>(
+        (r, accessor) => ({ ...r, [accessor.id]: false }),
+        {},
+      );
     const existingItem = this.cookiePolicy.find(
       (x) => x.sourceUrl === item.sourceUrl,
     );
     if (existingItem) {
       // update
       const index = this.cookiePolicy.indexOf(existingItem);
-      this.cookiePolicy[index] = { ...this.cookiePolicy[index], ...item };
+      if (item.state !== 'unsupported') {
+        this.cookiePolicy[index] = {
+          purposeChoice: emptyPurposeChoice,
+          cookieAccessorChoice: emptyAccessorChoice,
+          ...this.cookiePolicy[index],
+          ...item,
+        };
+      } else {
+        this.cookiePolicy[index] = { ...this.cookiePolicy[index], ...item };
+      }
       await this.update({
         scope: 'cookiepolicy',
         query: { _id: existingItem._id },
-        value: item,
+        value: this.cookiePolicy[index],
       });
       return true;
     } else {
       // add
+      if (item.state !== 'unsupported') {
+        item = {
+          purposeChoice: emptyPurposeChoice,
+          cookieAccessorChoice: emptyAccessorChoice,
+          ...item,
+        };
+      }
       const listItem = await this.insert<ICookiePolicyItem>({
         scope: 'cookiepolicy',
         item,
