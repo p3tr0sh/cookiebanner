@@ -465,13 +465,14 @@ export class View {
   }
 
   private async deleteUnwantedCookies() {
+    console.log('Sort out cookies');
     const allCookies = await this.webContents.session.cookies.get({});
+    console.log(`Found ${allCookies.length} Cookies`);
     let origins = new Set<string>();
     for (const cookie of allCookies) {
       if (!Application.instance.storage.isCookieAllowed(cookie)) {
-        const origin = checkURL(cookie.domain).origin;
         if (cookie.name !== 'cookiepolicy') {
-          origins.add(origin);
+          origins.add(cookie.domain);
         }
       }
     }
