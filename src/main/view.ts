@@ -5,13 +5,14 @@ import { AppWindow } from './windows';
 import {
   IHistoryItem,
   IBookmark,
-  ICookiePolicyItem,
-  ServerPolicy,
   generatePolicyString,
   PolicyNotSetError,
   PolicyServiceNotProvidedError,
   PolicyNotFoundError,
+  CookiePolicyExternalItem,
+  CookiePolicyInternalItem,
   PolicyWithChoice,
+  ServerPolicy,
 } from '~/interfaces';
 import {
   ERROR_PROTOCOL,
@@ -116,19 +117,19 @@ export class View {
 
     cookies.addListener('changed', (event, cookie, cause, removed) => {
       // console.log(cookie.domain);
-      var url = cookie.domain;
-      if (url.startsWith('.')) {
-        url = `www${url}`;
-      }
-      if (!url.startsWith('http')) {
-        url = `http://${url}`;
-      }
-      // TODO: build diff here?
-      if (cookie.httpOnly) {
-        console.log(
-          `[HTTP only cookie] -- Cookie change: ${JSON.stringify(cookie)}`,
-        );
-      }
+
+      const loading = this.webContents.isLoading();
+
+      const allowed =
+        cookie.name === 'cookiepolicy' ||
+        Application.instance.storage.isCookieAllowed(cookie);
+      console.log(
+        `Cookie change is ${allowed || removed ? '' : 'NOT '}allowed. ${
+          cookie.domain
+        }: ${cookie.name}; ${cause}; ${removed ? 'removed; ' : ''}${
+          loading ? '' : 'not '
+        }loading. Proceding...`,
+      );
     });
 
     ///////////////////// Proxy for BurpSuite /////////////////////
@@ -243,15 +244,9 @@ export class View {
     );
 
     this.webContents.addListener('did-finish-load', () => {
-      console.log(
-        `finished loading ${this.webContents.getTitle()} ${this.webContents.getURL()}`,
-      );
-
       // setup my HttpRequest to request CookiePolicyManager
       this.handleCookiePolicy()
         .then((showBanner) => {
-          console.log(`Show banner? ${showBanner}`);
-
           // search for __tcfapi, see view-preload.ts
           // this.send('tcfapi-grabber');
 
@@ -322,7 +317,7 @@ export class View {
         // close banner window
         this.nativeCookieBannerWindow.destroy();
         // Save choice in database
-        const item: ICookiePolicyItem = {
+        const item: CookiePolicyExternalItem = {
           state: 'selected',
           sourceUrl,
           purposeChoice: policy.purposeChoice,
@@ -331,7 +326,7 @@ export class View {
         await Application.instance.storage.addOrUpdateCookiePolicyItem(item);
 
         console.log('Successfully added entry to policy storage.');
-        const updatedPolicy = await Application.instance.storage.findOne<ICookiePolicyItem>(
+        const updatedPolicy = await Application.instance.storage.findOne<CookiePolicyInternalItem>(
           {
             scope: 'cookiepolicy',
             query: { sourceUrl },
@@ -511,7 +506,7 @@ export class View {
     });
   }
 
-  private setPolicyCookie(policy: ICookiePolicyItem): Promise<void> {
+  private setPolicyCookie(policy: CookiePolicyInternalItem): Promise<void> {
     if (policy.state === 'unsupported') {
       return new Promise<void>((resolve) => resolve());
     }
@@ -578,9 +573,9 @@ export class View {
         visitedSite,
       });
     } catch (e) {
-      // TODO: how to react on pages without cookiepolicy? show warning on banner?
+      // website does not support policyManager, show warning on banner
       // console.log('Site does not provide the CookiePolicyManager interface.');
-      const item: ICookiePolicyItem = {
+      const item: CookiePolicyExternalItem = {
         sourceUrl: url.origin,
         state: 'unsupported',
       };
@@ -596,7 +591,7 @@ export class View {
       return false;
     }
     // Store in CookiePolicy
-    const item: ICookiePolicyItem = {
+    const item: CookiePolicyExternalItem = {
       ...response,
       sourceUrl: url.origin,
       state: 'not-selected',

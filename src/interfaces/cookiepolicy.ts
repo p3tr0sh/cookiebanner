@@ -24,33 +24,81 @@ type ServerPolicy = {
   cookieAccessors: CookieAccessor[];
 };
 
-type PolicyWithChoice = ServerPolicy & {
+type PolicyChoice = {
   purposeChoice: { [key: PurposeId]: boolean };
   cookieAccessorChoice: { [key: CookieAccessorId]: boolean };
 };
 
-type ICookiePolicyNotSupportedItem = {
+type PolicyWithChoice = ServerPolicy & PolicyChoice;
+
+type CookiePolicyNotSupportedItem = {
   _id?: string;
   sourceUrl: string;
   state: 'unsupported';
 };
 
-/**
- * TODO: if purposeChoice is false, accessors depending on that purpose automatically get deactivated
- */
-type ICookiePolicySupportedItem = {
+type CookiePolicyHead = {
   _id?: string;
   sourceUrl: string;
   state: 'selected' | 'not-selected';
-} & Partial<PolicyWithChoice>;
+};
 
-type ICookiePolicyItem =
-  | ICookiePolicyNotSupportedItem
-  | ICookiePolicySupportedItem;
+type CookiePolicyExternal = CookiePolicyHead & Partial<PolicyWithChoice>;
 
-function generatePolicyString(policy: ICookiePolicySupportedItem): string {
+type CookiePolicyInternal = CookiePolicyHead & PolicyWithChoice;
+
+type CookiePolicyInternalItem =
+  | CookiePolicyNotSupportedItem
+  | CookiePolicyInternal;
+
+type CookiePolicyExternalItem =
+  | CookiePolicyNotSupportedItem
+  | CookiePolicyExternal;
+
+function generatePolicyString(policy: CookiePolicyInternal): string {
   const { version, purposeChoice, cookieAccessorChoice } = policy;
   return JSON.stringify({ version, purposeChoice, cookieAccessorChoice });
+}
+
+function generateChoice(external: CookiePolicyExternal): Partial<PolicyChoice> {
+  let choice = {};
+  if (!external.purposeChoice && !!external.purposes) {
+    choice = {
+      ...choice,
+      purposeChoice: external.purposes.reduce<{ [key: PurposeId]: boolean }>(
+        (r, purpose) => ({ ...r, [purpose.id]: false }),
+        {},
+      ),
+    };
+  }
+  if (!external.cookieAccessorChoice && !!external.cookieAccessors) {
+    choice = {
+      ...choice,
+      cookieAccessorChoice: external.cookieAccessors.reduce<{
+        [key: CookieAccessorId]: boolean;
+      }>((r, accessor) => ({ ...r, [accessor.id]: false }), {}),
+    };
+  }
+  return choice;
+}
+
+function mergePolicy(
+  oldItem: CookiePolicyInternalItem,
+  newItem: CookiePolicyExternalItem,
+): CookiePolicyInternalItem {
+  // if new item is not supportet just override
+  if (newItem.state === 'unsupported') {
+    return newItem;
+  }
+  // if old Item was unsupported, transform newItem to InternalItem
+  if (oldItem.state === 'unsupported') {
+    return newItem as CookiePolicyInternalItem;
+  }
+  // merge
+  let item = generateChoice(newItem);
+  item = { ...item, ...oldItem };
+  item = { ...item, ...newItem };
+  return item as CookiePolicyInternalItem;
 }
 
 class PolicyNotSetError extends Error {
@@ -79,11 +127,14 @@ class PolicyServiceNotProvidedError extends Error {
 export {
   Purpose,
   CookieAccessor,
-  ICookiePolicyItem,
-  ServerPolicy,
+  CookiePolicyInternalItem,
+  CookiePolicyExternalItem,
   PolicyWithChoice,
+  ServerPolicy,
   PolicyNotSetError,
   PolicyNotFoundError,
   PolicyServiceNotProvidedError,
   generatePolicyString,
+  mergePolicy,
+  generateChoice,
 };

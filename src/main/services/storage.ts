@@ -13,7 +13,10 @@ import {
   IVisitedItem,
   IFavicon,
   IBookmark,
-  ICookiePolicyItem,
+  CookiePolicyInternalItem,
+  CookiePolicyExternalItem,
+  generateChoice,
+  mergePolicy,
 } from '~/interfaces';
 import { countVisitedTimes } from '~/utils/history';
 import { promises } from 'fs';
@@ -56,7 +59,7 @@ export class StorageService {
     cookiepolicy: null,
   };
 
-  public cookiePolicy: ICookiePolicyItem[] = [];
+  public cookiePolicy: CookiePolicyInternalItem[] = [];
 
   public history: IHistoryItem[] = [];
 
@@ -227,7 +230,7 @@ export class StorageService {
   }
 
   private async loadCookiePolicy() {
-    const items: ICookiePolicyItem[] = await this.find({
+    const items: CookiePolicyInternalItem[] = await this.find({
       scope: 'cookiepolicy',
       query: {},
     });
@@ -523,38 +526,16 @@ ${other.join(breakTag)}
   };
 
   public async addOrUpdateCookiePolicyItem(
-    item: ICookiePolicyItem,
+    item: CookiePolicyExternalItem,
   ): Promise<boolean> {
-    const emptyPurposeChoice =
-      item.state !== 'unsupported' &&
-      item.purposes &&
-      item.purposes.reduce<Record<number, boolean>>(
-        (r, purpose) => ({ ...r, [purpose.id]: false }),
-        {},
-      );
-    const emptyAccessorChoice =
-      item.state !== 'unsupported' &&
-      item.purposes &&
-      item.cookieAccessors.reduce<Record<number, boolean>>(
-        (r, accessor) => ({ ...r, [accessor.id]: false }),
-        {},
-      );
     const existingItem = this.cookiePolicy.find(
       (x) => x.sourceUrl === item.sourceUrl,
     );
     if (existingItem) {
       // update
       const index = this.cookiePolicy.indexOf(existingItem);
-      if (item.state !== 'unsupported') {
-        this.cookiePolicy[index] = {
-          purposeChoice: emptyPurposeChoice,
-          cookieAccessorChoice: emptyAccessorChoice,
-          ...this.cookiePolicy[index],
-          ...item,
-        };
-      } else {
-        this.cookiePolicy[index] = { ...this.cookiePolicy[index], ...item };
-      }
+      this.cookiePolicy[index] = mergePolicy(this.cookiePolicy[index], item);
+
       await this.update({
         scope: 'cookiepolicy',
         query: { _id: existingItem._id },
@@ -565,12 +546,11 @@ ${other.join(breakTag)}
       // add
       if (item.state !== 'unsupported') {
         item = {
-          purposeChoice: emptyPurposeChoice,
-          cookieAccessorChoice: emptyAccessorChoice,
+          ...generateChoice(item),
           ...item,
         };
       }
-      const listItem = await this.insert<ICookiePolicyItem>({
+      const listItem = await this.insert<CookiePolicyInternalItem>({
         scope: 'cookiepolicy',
         item,
       });
@@ -585,7 +565,7 @@ ${other.join(breakTag)}
    * @param url visited site to match the scope against
    * @returns policy with most fitting scope or undefined
    */
-  public findPolicyByURL(url: string): ICookiePolicyItem | undefined {
+  public findPolicyByURL(url: string): CookiePolicyInternalItem | undefined {
     const visitedSite = checkURL(url);
     if (!visitedSite) {
       return undefined;
@@ -626,16 +606,29 @@ ${other.join(breakTag)}
       return false;
     }
     // search for accessors in user-selected policies
-    return this.cookiePolicy.some(
-      (x) =>
+    return this.cookiePolicy.some((x) => {
+      return (
         x.state === 'selected' &&
-        x.cookieAccessors.some(
-          (accessor) =>
+        x.cookieAccessors.some((accessor) => {
+          if (
             x.cookieAccessorChoice &&
             x.cookieAccessorChoice[accessor.id] &&
-            matchesScope(domain, checkURL(accessor.scope)),
-        ),
-    );
+            matchesScope(domain, checkURL(accessor.scope))
+          ) {
+            console.log(
+              `Cookie ${domain}: ${cookie.name} is allowed by rule [${
+                x.sourceUrl
+              }: ${JSON.stringify(accessor)}]`,
+            );
+          }
+          return (
+            x.cookieAccessorChoice &&
+            x.cookieAccessorChoice[accessor.id] &&
+            matchesScope(domain, checkURL(accessor.scope))
+          );
+        })
+      );
+    });
   }
 
   public clearCookiePolicy(): Promise<number> {
