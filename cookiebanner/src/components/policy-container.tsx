@@ -21,10 +21,10 @@ function replaceNewlines(text: string) {
 
 export function PolicyContainer({
   issuer,
-  style,
+  visible,
 }: {
   issuer: number;
-  style: React.CSSProperties;
+  visible: boolean;
 }) {
   const [sourceUrl, setSourceUrl] = useState<string>();
   const [policy, setPolicy] = useState<Policy>();
@@ -37,13 +37,18 @@ export function PolicyContainer({
     ipc.send('banner-clear-policies', { issuer });
   }
 
+  function changeAllPurposes(state: boolean) {
+    if (policy) {
+      policy.purposes
+        .filter(isPurposeNeeded)
+        .forEach((purpose) => changePurpose(purpose.id, state));
+    }
+  }
+
   function changePurpose(id: number, state: boolean) {
     const newPolicy = { ...policy };
     newPolicy.purposeChoice[id] = state;
 
-    if (!newPolicy.cookieAccessorChoice) {
-      newPolicy.cookieAccessorChoice = {};
-    }
     // go through all accessors and (de-)activate those depending on the purpose
     for (const accessor of newPolicy.cookieAccessors) {
       if (accessor.purposes.includes(id)) {
@@ -67,8 +72,6 @@ export function PolicyContainer({
   function isAccessorAvailable(id: number): boolean {
     return (
       policy &&
-      policy.cookieAccessors &&
-      policy.purposeChoice &&
       policy.cookieAccessors[id].purposes.every(
         (pid) => policy.purposeChoice[pid],
       )
@@ -95,22 +98,43 @@ export function PolicyContainer({
 
   return (
     <>
-      <h1 className={styles.centering}>
+      <h1
+        className={styles.centering}
+        style={visible ? { display: 'initial' } : { display: 'none' }}
+      >
         Cookie Policy for "{policy && policy.sourceUrl}"
       </h1>
-      <div id="policy-container" style={style}>
+      <div
+        id="policy-container"
+        style={visible ? { display: 'flex' } : { display: 'none' }}
+      >
         <div className={styles.column}>
           <h2>Purposes</h2>
           <ul className={styles.flexList}>
+            <li>
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={
+                    policy &&
+                    policy.purposes
+                      .filter(isPurposeNeeded)
+                      .every((purpose) => policy.purposeChoice[purpose.id])
+                  }
+                  onChange={(e) => {
+                    changeAllPurposes(e.target.checked);
+                  }}
+                />
+                <span className={styles.purposeId}>all</span>
+              </label>
+            </li>
             {policy &&
               policy.purposes.filter(isPurposeNeeded).map((purpose) => (
                 <li>
                   <label className={styles.checkboxLabel}>
                     <input
                       type="checkbox"
-                      checked={
-                        policy.purposeChoice && policy.purposeChoice[purpose.id]
-                      }
+                      checked={policy.purposeChoice[purpose.id]}
                       onChange={(e) => {
                         changePurpose(purpose.id, e.target.checked);
                       }}
@@ -147,10 +171,7 @@ export function PolicyContainer({
                   >
                     <input
                       type="checkbox"
-                      checked={
-                        policy.cookieAccessorChoice &&
-                        policy.cookieAccessorChoice[accessor.id]
-                      }
+                      checked={policy.cookieAccessorChoice[accessor.id]}
                       onChange={(e) => {
                         changeAccessor(accessor.id, e.target.checked);
                       }}

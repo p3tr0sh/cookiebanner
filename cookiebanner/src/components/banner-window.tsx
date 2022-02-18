@@ -24,14 +24,8 @@ export function BannerWindow() {
 
   return (
     <>
-      <PolicyContainer
-        issuer={issuer}
-        style={{ display: mode === 'policy' ? 'flex' : 'none' }}
-      />
-      <MessageContainer
-        issuer={issuer}
-        style={{ display: mode === 'message' ? 'initial' : 'none' }}
-      />
+      <PolicyContainer issuer={issuer} visible={mode === 'policy'} />
+      <MessageContainer issuer={issuer} visible={mode === 'message'} />
     </>
   );
 }

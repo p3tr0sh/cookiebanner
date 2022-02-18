@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import * as React from 'react';
 import { ipcRenderer as ipc } from 'electron';
 
+import styles from '../styles/banner.module.css';
+
 export function MessageContainer({
   issuer,
-  style,
+  visible,
 }: {
   issuer: number;
-  style: React.CSSProperties;
+  visible: boolean;
 }) {
   const [headline, setHeadline] = useState<string>();
   const [message, setMessage] = useState<string>();
@@ -29,8 +31,13 @@ export function MessageContainer({
   }
 
   return (
-    <div id="message-container" style={style}>
-      <h1>{headline}</h1>
+    <div
+      id="message-container"
+      style={visible ? { display: 'initial' } : { display: 'none' }}
+    >
+      <h1 className={styles.centering} style={{ color: '#bd1e3c' }}>
+        {headline}
+      </h1>
       <p>{message}</p>
       <button onClick={historyBack}>Go back</button>
     </div>

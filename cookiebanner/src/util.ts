@@ -15,9 +15,9 @@ type CookieAccessor = {
 type Policy = {
   sourceUrl: string;
   purposes: Purpose[];
-  purposeChoice?: { [purposeId: number]: boolean };
+  purposeChoice: { [purposeId: number]: boolean };
   cookieAccessors: CookieAccessor[];
-  cookieAccessorChoice?: { [cookieAccessorId: number]: boolean };
+  cookieAccessorChoice: { [cookieAccessorId: number]: boolean };
 };
 
 type CookieWrappingIssuer = { command: 'issuer'; issuer: number };
