@@ -100,7 +100,7 @@ export function PolicyContainer({
     <>
       <h1
         className={styles.centering}
-        style={visible ? { display: 'initial' } : { display: 'none' }}
+        style={visible ? { display: 'block' } : { display: 'none' }}
       >
         Cookie Policy for "{policy && policy.sourceUrl}"
       </h1>
