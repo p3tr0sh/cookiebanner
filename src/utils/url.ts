@@ -43,13 +43,17 @@ export const prefixHttp = (url: string): string => {
   return url.includes('://') ? url : `http://${url}`;
 };
 
-export function checkURL(urlString: string): URL | undefined {
+export function checkURL(urlString: string, secure?: boolean): URL | undefined {
   if (!urlString || urlString === '') {
     return undefined;
   }
   // check scheme or prepend http
   if (!urlString.includes('://')) {
-    urlString = `http://${urlString}`;
+    if (secure) {
+      urlString = `https://${urlString}`;
+    } else {
+      urlString = `http://${urlString}`;
+    }
   }
   return new URL(urlString);
 }

@@ -71,7 +71,7 @@ export class View {
   private lastUrl = '';
 
   private nativeCookieBannerWindow: BrowserWindow;
-  private cookiesBeforeLoading: Cookie[] = [];
+  private cookieJar: Cookie[] = [];
 
   public constructor(window: AppWindow, url: string, incognito: boolean) {
     this.browserView = new BrowserView({
@@ -116,20 +116,25 @@ export class View {
     const cookies = this.webContents.session.cookies;
 
     cookies.addListener('changed', (event, cookie, cause, removed) => {
-      // console.log(cookie.domain);
+      // Delete cookie directly after it is set when it is not allowed by the policy
 
       const loading = this.webContents.isLoading();
 
       const allowed =
         cookie.name === 'cookiepolicy' ||
         Application.instance.storage.isCookieAllowed(cookie);
-      console.log(
-        `Cookie change is ${allowed || removed ? '' : 'NOT '}allowed. ${
-          cookie.domain
-        }: ${cookie.name}; ${cause}; ${removed ? 'removed; ' : ''}${
-          loading ? '' : 'not '
-        }loading. Proceding...`,
-      );
+
+      if (!allowed && loading && !removed) {
+        this.cookieJar.push(cookie);
+      } else if (!allowed && !removed) {
+        const cookieUrl = checkURL(cookie.domain, !!cookie.secure);
+        this.webContents.session.cookies
+          .remove(cookieUrl.href, cookie.name)
+          .then(() => {
+            console.log(`Removed cookie ${cookieUrl.href}:${cookie.name}`);
+          })
+          .catch((r) => console.log(`Could not remove cookie: ${r}`));
+      }
     });
 
     ///////////////////// Proxy for BurpSuite /////////////////////
@@ -460,39 +465,19 @@ export class View {
   }
 
   private async deleteUnwantedCookies() {
-    console.log('Sort out cookies');
-    const allCookies = await this.webContents.session.cookies.get({});
-    console.log(`Found ${allCookies.length} Cookies`);
-    let origins = new Set<string>();
-    for (const cookie of allCookies) {
-      if (!Application.instance.storage.isCookieAllowed(cookie)) {
-        if (cookie.name !== 'cookiepolicy') {
-          origins.add(cookie.domain);
-        }
+    // TODO: do not search all cookies. only search cookies that were set since last wipe.
+    if (this.cookieJar.length === 0) {
+      return;
+    }
+    console.log(`Deleting ${this.cookieJar.length} Cookies...`);
+    for (const cookie of this.cookieJar) {
+      if (cookie.name !== 'cookiepolicy') {
+        const cookieUrl = checkURL(cookie.domain, !!cookie.secure).href;
+        await this.webContents.session.cookies.remove(cookieUrl, cookie.name);
       }
     }
-
-    let reload = false;
-    for (const origin of origins) {
-      await this.webContents.session.clearStorageData({
-        storages: ['cookies'],
-        origin,
-      });
-      console.log(`Removed Cookies from ${origin}`);
-      // Re-set policy cookie if existing
-      try {
-        await this.setPolicyCookieFromStorage(checkURL(origin));
-      } catch (e) {
-        if (e instanceof PolicyNotSetError) {
-          reload = true;
-        } else if (!(e instanceof PolicyNotFoundError)) {
-          throw e;
-        }
-      }
-    }
-    if (reload) {
-      this.webContents.reload();
-    }
+    this.cookieJar = [];
+    console.log('Deletion done.');
   }
 
   private isCookiePolicySet(domain: string): Promise<boolean> {
