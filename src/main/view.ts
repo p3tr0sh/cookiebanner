@@ -305,6 +305,12 @@ export class View {
       }
     });
 
+    ipcMain.on('banner-close', (_, arg: { issuer: number }) => {
+      if (arg.issuer === this.webContents.id) {
+        this.nativeCookieBannerWindow.destroy();
+      }
+    });
+
     ipcMain.on(
       'policy-choice',
       async (
@@ -596,9 +602,11 @@ export class View {
     }
     this.nativeCookieBannerWindow = new BrowserWindow({
       parent: this.window.win,
-      // modal: true,
+      modal: true,
       minimizable: false,
       maximizable: false,
+      resizable: false,
+      fullscreenable: false,
       title: 'Cookie Policy Manager',
       show: false,
       webPreferences: {
@@ -630,11 +638,9 @@ export class View {
       this.sendToBanner('message');
     }
     this.nativeCookieBannerWindow.show();
-    this.nativeCookieBannerWindow.webContents.openDevTools({
-      mode: 'detach',
-    });
-    // }
-    // }
+    // this.nativeCookieBannerWindow.webContents.openDevTools({
+    //   mode: 'detach',
+    // });
   }
 
   public get webContents() {

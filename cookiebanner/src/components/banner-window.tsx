@@ -3,6 +3,7 @@ import * as React from 'react';
 import { ipcRenderer as ipc } from 'electron';
 import { MessageContainer } from './message-container';
 import { PolicyContainer } from './policy-container';
+import styles from '../styles/banner.module.css';
 
 type Modes = 'policy' | 'message';
 
@@ -26,6 +27,12 @@ export function BannerWindow() {
     <>
       <PolicyContainer issuer={issuer} visible={mode === 'policy'} />
       <MessageContainer issuer={issuer} visible={mode === 'message'} />
+      <button
+        onClick={() => ipc.send('banner-close', { issuer })}
+        className={styles.closeButton}
+      >
+        Cancel
+      </button>
     </>
   );
 }
