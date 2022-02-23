@@ -29,6 +29,16 @@ type PolicyChoice = {
   cookieAccessorChoice: { [key: CookieAccessorId]: boolean };
 };
 
+type CookieLogEntry = {
+  setter: string;
+  url: string;
+  name: string;
+};
+
+type CookieLog = {
+  cookies: CookieLogEntry[];
+};
+
 type PolicyWithChoice = ServerPolicy & PolicyChoice;
 
 type CookiePolicyNotSupportedItem = {
@@ -43,9 +53,10 @@ type CookiePolicyHead = {
   state: 'selected' | 'not-selected';
 };
 
-type CookiePolicyExternal = CookiePolicyHead & Partial<PolicyWithChoice>;
+type CookiePolicyExternal = CookiePolicyHead &
+  Partial<PolicyWithChoice & CookieLog>;
 
-type CookiePolicyInternal = CookiePolicyHead & PolicyWithChoice;
+type CookiePolicyInternal = CookiePolicyHead & PolicyWithChoice & CookieLog;
 
 type CookiePolicyInternalItem =
   | CookiePolicyNotSupportedItem
@@ -60,8 +71,10 @@ function generatePolicyString(policy: CookiePolicyInternal): string {
   return JSON.stringify({ version, purposeChoice, cookieAccessorChoice });
 }
 
-function generateChoice(external: CookiePolicyExternal): Partial<PolicyChoice> {
-  let choice = {};
+function generatePolicyInternals(
+  external: CookiePolicyExternal,
+): Partial<PolicyChoice & CookieLog> {
+  let choice: Partial<PolicyChoice & CookieLog> = { cookies: [] };
   if (!external.purposeChoice && !!external.purposes) {
     choice = {
       ...choice,
@@ -92,13 +105,35 @@ function mergePolicy(
   }
   // if old Item was unsupported, transform newItem to InternalItem
   if (oldItem.state === 'unsupported') {
-    return newItem as CookiePolicyInternalItem;
+    return {
+      ...generatePolicyInternals(newItem),
+      ...newItem,
+    } as CookiePolicyInternalItem;
   }
   // merge
-  let item = generateChoice(newItem);
+  let item = generatePolicyInternals(newItem);
   item = { ...item, ...oldItem };
   item = { ...item, ...newItem };
   return item as CookiePolicyInternalItem;
+}
+
+function arraysMatch(a: Array<string>, b: Array<string>): boolean {
+  return (
+    a.every((value) => b.includes(value)) &&
+    b.every((value) => a.includes(value))
+  );
+}
+
+function shallowEqual<T extends { [key: string]: any }>(a: T, b: T): boolean {
+  if (!arraysMatch(Object.keys(a), Object.keys(b))) {
+    return false;
+  }
+  for (const key of Object.keys(a)) {
+    if (a[key] !== b[key]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 class PolicyNotSetError extends Error {
@@ -127,6 +162,7 @@ class PolicyServiceNotProvidedError extends Error {
 export {
   Purpose,
   CookieAccessor,
+  CookieLogEntry,
   CookiePolicyInternalItem,
   CookiePolicyExternalItem,
   PolicyWithChoice,
@@ -136,5 +172,6 @@ export {
   PolicyServiceNotProvidedError,
   generatePolicyString,
   mergePolicy,
-  generateChoice,
+  generatePolicyInternals,
+  shallowEqual,
 };

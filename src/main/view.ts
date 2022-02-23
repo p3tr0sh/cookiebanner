@@ -32,7 +32,7 @@ import { getUserAgentForURL } from './user-agent';
 
 import { join } from 'path';
 import { transmitJSON } from './network/request';
-import { checkURL, matchesScope, UUID } from '~/utils';
+import { checkURL, matchesScope } from '~/utils';
 
 interface IAuthInfo {
   url: string;
@@ -122,18 +122,30 @@ export class View {
 
       const allowed =
         cookie.name === 'cookiepolicy' ||
-        Application.instance.storage.isCookieAllowed(cookie);
+        Application.instance.storage.isCookieAllowed(
+          cookie,
+          this.webContents.getURL(),
+        );
 
-      if (!allowed && loading && !removed) {
-        this.cookieJar.push(cookie);
-      } else if (!allowed && !removed) {
-        const cookieUrl = checkURL(cookie.domain, !!cookie.secure);
-        this.webContents.session.cookies
-          .remove(cookieUrl.href, cookie.name)
-          .then(() => {
-            console.log(`Removed cookie ${cookieUrl.href}:${cookie.name}`);
-          })
-          .catch((r) => console.log(`Could not remove cookie: ${r}`));
+      if (!allowed && !removed) {
+        if (loading) {
+          this.cookieJar.push(cookie);
+        } else {
+          const cookieUrl = checkURL(cookie.domain, !!cookie.secure);
+          this.webContents.session.cookies
+            .remove(cookieUrl.href, cookie.name)
+            .then(() => {
+              console.log(`Removed cookie ${cookieUrl.href}:${cookie.name}`);
+            })
+            .catch((r) => console.log(`Could not remove cookie: ${r}`));
+        }
+      } else if (allowed) {
+        // update cookie log to delete cookies when policy is adjusted later on
+        Application.instance.storage.updateCookieLog(
+          removed ? 'remove' : 'add',
+          cookie,
+          this.webContents.getURL(),
+        );
       }
     });
 
@@ -315,13 +327,16 @@ export class View {
       'policy-choice',
       async (
         _,
-        arg: {
+        {
+          issuer,
+          sourceUrl,
+          policy,
+        }: {
           issuer: number;
           sourceUrl: string;
           policy: PolicyWithChoice;
         },
       ) => {
-        const { issuer, sourceUrl, policy } = arg;
         if (issuer !== this.webContents.id) {
           return;
         }
@@ -334,15 +349,43 @@ export class View {
           purposeChoice: policy.purposeChoice,
           cookieAccessorChoice: policy.cookieAccessorChoice,
         };
-        await Application.instance.storage.addOrUpdateCookiePolicyItem(item);
+        await Application.instance.storage.addOrUpdateCookiePolicy(item);
 
-        console.log('Successfully added entry to policy storage.');
         const updatedPolicy = await Application.instance.storage.findOne<CookiePolicyInternalItem>(
           {
             scope: 'cookiepolicy',
             query: { sourceUrl },
           },
         );
+
+        if (updatedPolicy.state !== 'selected') {
+          throw new Error('Oh no! updated policy is invalid.');
+        }
+        // remove all cookies that don't comply the updated policy
+        for (const logEntry of updatedPolicy.cookies) {
+          this.webContents.session.cookies
+            .get({ url: logEntry.url, name: logEntry.name })
+            .then((cookies) =>
+              cookies.forEach((cookie) => {
+                if (
+                  !Application.instance.storage.isCookieAllowed(
+                    cookie,
+                    sourceUrl,
+                  )
+                ) {
+                  this.webContents.session.cookies.remove(
+                    logEntry.url,
+                    logEntry.name,
+                  );
+                  Application.instance.storage.updateCookieLog(
+                    'remove',
+                    cookie,
+                    sourceUrl,
+                  );
+                }
+              }),
+            );
+        }
         // now set cookie with policy and re-request site to load cookies from server
         // TODO: set with expiration or load this cookie upon loading a website and then reload page
         this.setPolicyCookie(updatedPolicy)
@@ -513,9 +556,6 @@ export class View {
   private async setPolicyCookieFromStorage(url: URL): Promise<boolean> {
     const policy = Application.instance.storage.findPolicyByURL(url.href);
     if (policy) {
-      console.log(
-        `Policy existing: (maybe ask for newer version. expiration?)`,
-      );
       // Load Policy from storage (if existing)
       if (
         !(await this.isCookiePolicySet(url.hostname)) &&
@@ -523,7 +563,6 @@ export class View {
       ) {
         await this.setPolicyCookie(policy);
         // send policy to banner
-        // this.sendToBanner('policy');
         throw new PolicyNotSetError();
       }
       if (policy.state === 'unsupported' || policy.state === 'not-selected') {
@@ -570,7 +609,7 @@ export class View {
         sourceUrl: url.origin,
         state: 'unsupported',
       };
-      await Application.instance.storage.addOrUpdateCookiePolicyItem(item);
+      await Application.instance.storage.addOrUpdateCookiePolicy(item);
       throw new PolicyServiceNotProvidedError();
     }
     const scopeURL = checkURL(response.scope);
@@ -587,7 +626,7 @@ export class View {
       sourceUrl: url.origin,
       state: 'not-selected',
     };
-    await Application.instance.storage.addOrUpdateCookiePolicyItem(item);
+    await Application.instance.storage.addOrUpdateCookiePolicy(item);
     // TODO: requests new policies with version number
 
     return true;

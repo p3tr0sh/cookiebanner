@@ -15,15 +15,16 @@ import {
   IBookmark,
   CookiePolicyInternalItem,
   CookiePolicyExternalItem,
-  generateChoice,
   mergePolicy,
+  generatePolicyInternals,
+  CookieLogEntry,
+  shallowEqual,
 } from '~/interfaces';
 import { countVisitedTimes } from '~/utils/history';
 import { promises } from 'fs';
 import { Application } from '../application';
 import { requestURL } from '../network/request';
 import * as parse from 'node-bookmarks-parser';
-import { newUrlFromBase } from 'electron-updater';
 import { Cookie } from 'electron/main';
 
 interface Databases {
@@ -525,16 +526,21 @@ ${other.join(breakTag)}
     }
   };
 
-  public async addOrUpdateCookiePolicyItem(
-    item: CookiePolicyExternalItem,
+  /**
+   * Add or update a policy in storage
+   * @param policy external policy that is either merged into an existing policy or added to storage
+   * @returns true if policy got updated and cookies need to be pruned
+   */
+  public async addOrUpdateCookiePolicy(
+    policy: CookiePolicyExternalItem,
   ): Promise<boolean> {
     const existingItem = this.cookiePolicy.find(
-      (x) => x.sourceUrl === item.sourceUrl,
+      (x) => x.sourceUrl === policy.sourceUrl,
     );
     if (existingItem) {
       // update
       const index = this.cookiePolicy.indexOf(existingItem);
-      this.cookiePolicy[index] = mergePolicy(this.cookiePolicy[index], item);
+      this.cookiePolicy[index] = mergePolicy(this.cookiePolicy[index], policy);
 
       await this.update({
         scope: 'cookiepolicy',
@@ -544,19 +550,59 @@ ${other.join(breakTag)}
       return true;
     } else {
       // add
-      if (item.state !== 'unsupported') {
-        item = {
-          ...generateChoice(item),
-          ...item,
+      if (policy.state !== 'unsupported') {
+        policy = {
+          ...generatePolicyInternals(policy),
+          ...policy,
         };
       }
       const listItem = await this.insert<CookiePolicyInternalItem>({
         scope: 'cookiepolicy',
-        item,
+        item: policy,
       });
       this.cookiePolicy.push(listItem);
-      return true;
+      return false;
     }
+  }
+
+  public async updateCookieLog(
+    operation: 'add' | 'remove',
+    cookie: Cookie,
+    context: string,
+  ): Promise<void> {
+    const policy = this.findPolicyByURL(context);
+    if (
+      !policy ||
+      policy.state !== 'selected' ||
+      cookie.name === 'cookiepolicy'
+    ) {
+      return;
+    }
+    const idx = this.cookiePolicy.indexOf(policy);
+
+    const logEntry: CookieLogEntry = {
+      setter: checkURL(context).origin,
+      url: checkURL(cookie.domain, !!cookie.secure).href,
+      name: cookie.name,
+    };
+
+    if (operation == 'add') {
+      // remove first and then update to avoid duplicates
+      policy.cookies = policy.cookies.filter(
+        (item) => !shallowEqual(item, logEntry),
+      );
+      policy.cookies.push(logEntry);
+    } else {
+      policy.cookies = policy.cookies.filter(
+        (item) => !shallowEqual(item, logEntry),
+      );
+    }
+    this.cookiePolicy[idx] = policy;
+    await this.update({
+      scope: 'cookiepolicy',
+      query: { _id: policy._id },
+      value: this.cookiePolicy[idx],
+    });
   }
 
   /**
@@ -600,34 +646,29 @@ ${other.join(breakTag)}
    * @param cookie
    * @returns true if a policy exists
    */
-  public isCookieAllowed(cookie: Cookie): boolean {
+  public isCookieAllowed(cookie: Cookie, url: string): boolean {
     const domain = checkURL(cookie.domain);
     if (!domain) {
       return false;
     }
-    // search for accessors in user-selected policies
-    return this.cookiePolicy.some((x) => {
-      return (
-        x.state === 'selected' &&
-        x.cookieAccessors.some((accessor) => {
-          if (
-            x.cookieAccessorChoice &&
-            x.cookieAccessorChoice[accessor.id] &&
-            matchesScope(domain, checkURL(accessor.scope))
-          ) {
-            console.log(
-              `Cookie ${domain}: ${cookie.name} is allowed by rule [${
-                x.sourceUrl
-              }: ${JSON.stringify(accessor)}]`,
-            );
-          }
-          return (
-            x.cookieAccessorChoice &&
-            x.cookieAccessorChoice[accessor.id] &&
-            matchesScope(domain, checkURL(accessor.scope))
-          );
-        })
-      );
+    const policy = this.findPolicyByURL(url);
+    if (!policy || policy.state !== 'selected') {
+      return false;
+    }
+    return policy.cookieAccessors.some((accessor) => {
+      const allowed =
+        policy.cookieAccessorChoice &&
+        policy.cookieAccessorChoice[accessor.id] &&
+        matchesScope(domain, checkURL(accessor.scope));
+      if (allowed) {
+        console.log(
+          `Cookie ${domain}: ${cookie.name} is allowed by rule [${
+            policy.sourceUrl
+          }: ${JSON.stringify(accessor)}] on site ${url}`,
+        );
+      }
+
+      return allowed;
     });
   }
 
