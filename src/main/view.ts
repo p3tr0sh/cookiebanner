@@ -116,6 +116,7 @@ export class View {
     const cookies = this.webContents.session.cookies;
 
     cookies.addListener('changed', (event, cookie, cause, removed) => {
+      if (!this.isSelected) return;
       // Delete cookie directly after it is set when it is not allowed by the policy
 
       const loading = this.webContents.isLoading();
