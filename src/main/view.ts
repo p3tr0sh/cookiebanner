@@ -677,7 +677,10 @@ export class View {
     } else {
       this.sendToBanner('message');
     }
-    this.nativeCookieBannerWindow.show();
+    setTimeout(() => {
+      // give the IPC some time to send policy data to the banner before opening it
+      this.nativeCookieBannerWindow.show();
+    }, 50);
     // this.nativeCookieBannerWindow.webContents.openDevTools({
     //   mode: 'detach',
     // });
