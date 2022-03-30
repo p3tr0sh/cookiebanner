@@ -1,7 +1,9 @@
 import { Flavor } from '~/utils';
+import { v4 as genUUID } from 'uuid';
 
 type PurposeId = Flavor<number, 'PurposeId'>;
 type CookieAccessorId = Flavor<number, 'CookieAccessorId'>;
+type VisitorId = Flavor<string, 'VisitorId'>;
 
 type Purpose = {
   id: PurposeId;
@@ -25,6 +27,8 @@ type ServerPolicy = {
 };
 
 type PolicyChoice = {
+  visitorId: VisitorId;
+  consentTimestamp: number;
   purposeChoice: { [key: PurposeId]: boolean };
   cookieAccessorChoice: { [key: CookieAccessorId]: boolean };
 };
@@ -66,15 +70,30 @@ type CookiePolicyExternalItem =
   | CookiePolicyNotSupportedItem
   | CookiePolicyExternal;
 
-function generatePolicyString(policy: CookiePolicyInternal): string {
-  const { version, purposeChoice, cookieAccessorChoice } = policy;
-  return JSON.stringify({ version, purposeChoice, cookieAccessorChoice });
+function generatePolicyString({
+  version,
+  visitorId,
+  consentTimestamp,
+  purposeChoice,
+  cookieAccessorChoice,
+}: CookiePolicyInternal): string {
+  return JSON.stringify({
+    version,
+    visitorId,
+    consentTimestamp,
+    purposeChoice,
+    cookieAccessorChoice,
+  });
 }
 
 function generatePolicyInternals(
   external: CookiePolicyExternal,
 ): Partial<PolicyChoice & CookieLog> {
-  let choice: Partial<PolicyChoice & CookieLog> = { cookies: [] };
+  let choice: Partial<PolicyChoice & CookieLog> = {
+    cookies: [],
+    visitorId: genUUID(),
+    consentTimestamp: Date.now(),
+  };
   if (!external.purposeChoice && !!external.purposes) {
     choice = {
       ...choice,
@@ -112,8 +131,13 @@ function mergePolicy(
   }
   // merge
   let item = generatePolicyInternals(newItem);
-  item = { ...item, ...oldItem };
-  item = { ...item, ...newItem };
+  item = {
+    ...item,
+    ...oldItem,
+    ...newItem,
+    visitorId: oldItem.visitorId,
+    consentTimestamp: item.consentTimestamp,
+  };
   return item as CookiePolicyInternalItem;
 }
 
