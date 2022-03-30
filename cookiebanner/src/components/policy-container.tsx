@@ -30,11 +30,20 @@ export function PolicyContainer({
   const [policy, setPolicy] = useState<Policy>();
 
   function submit() {
-    ipc.send('policy-choice', { issuer, sourceUrl, policy });
+    ipc.send('policy-choice', { issuer, state: 'selected', sourceUrl, policy });
   }
 
   function clearPolicyStorage() {
     ipc.send('banner-clear-policies', { issuer });
+  }
+
+  function revokePolicy() {
+    ipc.send('policy-choice', {
+      issuer,
+      state: 'not-selected',
+      sourceUrl,
+      policy: {},
+    });
   }
 
   function changeAllPurposes(state: boolean) {
@@ -155,6 +164,9 @@ export function PolicyContainer({
           </button>
           <button id="whitelist-clear-btn" onClick={clearPolicyStorage}>
             &lt;Clear Whitelist&gt;
+          </button>
+          <button id="revoke-policy-btn" onClick={revokePolicy}>
+            Revoke Choice
           </button>
         </div>
         <div className={styles.column}>

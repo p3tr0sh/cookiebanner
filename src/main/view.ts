@@ -331,9 +331,11 @@ export class View {
         {
           issuer,
           sourceUrl,
+          state,
           policy,
         }: {
           issuer: number;
+          state: 'selected' | 'not-selected';
           sourceUrl: string;
           policy: PolicyWithChoice;
         },
@@ -345,10 +347,11 @@ export class View {
         this.nativeCookieBannerWindow.destroy();
         // Save choice in database
         const item: CookiePolicyExternalItem = {
-          state: 'selected',
+          state,
           sourceUrl,
-          purposeChoice: policy.purposeChoice,
-          cookieAccessorChoice: policy.cookieAccessorChoice,
+          purposeChoice: state === 'selected' ? policy.purposeChoice : {},
+          cookieAccessorChoice:
+            state === 'selected' ? policy.cookieAccessorChoice : {},
         };
         await Application.instance.storage.addOrUpdateCookiePolicy(item);
 
@@ -359,8 +362,11 @@ export class View {
           },
         );
 
-        if (updatedPolicy.state !== 'selected') {
-          throw new Error('Oh no! updated policy is invalid.');
+        if (updatedPolicy.state === 'not-selected') {
+          console.log('revoked consent');
+        }
+        if (updatedPolicy.state === 'unsupported') {
+          throw new Error('Policy not supported anymore');
         }
         // remove all cookies that don't comply the updated policy
         for (const logEntry of updatedPolicy.cookies) {
