@@ -5,7 +5,6 @@ import { AppWindow } from './windows';
 import {
   IHistoryItem,
   IBookmark,
-  generatePolicyString,
   PolicyNotSetError,
   PolicyServiceNotProvidedError,
   PolicyNotFoundError,
@@ -13,6 +12,8 @@ import {
   CookiePolicyInternalItem,
   PolicyWithChoice,
   ServerPolicy,
+  getVisitorId,
+  extractPolicyChoice,
 } from '~/interfaces';
 import {
   ERROR_PROTOCOL,
@@ -368,6 +369,16 @@ export class View {
         if (updatedPolicy.state === 'unsupported') {
           throw new Error('Policy not supported anymore');
         }
+
+        // send updated policy to server
+        const result: { status: number } = await transmitJSON(
+          checkURL(sourceUrl),
+          extractPolicyChoice(updatedPolicy),
+        );
+        if (result.status !== 0) {
+          throw new Error('Transmission of policy did not work.');
+        }
+
         // remove all cookies that don't comply the updated policy
         for (const logEntry of updatedPolicy.cookies) {
           this.webContents.session.cookies
@@ -556,7 +567,7 @@ export class View {
       url: scope.href,
       domain: scope.hostname,
       name: 'cookiepolicy',
-      value: generatePolicyString(policy),
+      value: getVisitorId(policy),
     });
   }
 

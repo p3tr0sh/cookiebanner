@@ -70,20 +70,24 @@ type CookiePolicyExternalItem =
   | CookiePolicyNotSupportedItem
   | CookiePolicyExternal;
 
-function generatePolicyString({
+function extractPolicyChoice({
   version,
   visitorId,
   consentTimestamp,
   purposeChoice,
   cookieAccessorChoice,
-}: CookiePolicyInternal): string {
-  return JSON.stringify({
+}: CookiePolicyInternal): { version: number } & PolicyChoice {
+  return {
     version,
     visitorId,
     consentTimestamp,
     purposeChoice,
     cookieAccessorChoice,
-  });
+  };
+}
+
+function getVisitorId({ visitorId }: CookiePolicyInternal): string {
+  return visitorId;
 }
 
 function generatePolicyInternals(
@@ -194,7 +198,8 @@ export {
   PolicyNotSetError,
   PolicyNotFoundError,
   PolicyServiceNotProvidedError,
-  generatePolicyString,
+  extractPolicyChoice,
+  getVisitorId,
   mergePolicy,
   generatePolicyInternals,
   shallowEqual,
