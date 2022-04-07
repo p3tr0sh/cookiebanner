@@ -563,6 +563,13 @@ export class View {
       return new Promise<void>((resolve) => resolve());
     }
     const scope = checkURL(policy.scope);
+    if (policy.state === 'not-selected') {
+      // Remove cookie after user withdrew consent
+      return this.webContents.session.cookies.remove(
+        scope.href,
+        'cookiepolicy',
+      );
+    }
     return this.webContents.session.cookies.set({
       url: scope.href,
       domain: scope.hostname,
@@ -577,7 +584,7 @@ export class View {
       // Load Policy from storage (if existing)
       if (
         !(await this.isCookiePolicySet(url.hostname)) &&
-        policy.state !== 'unsupported'
+        policy.state === 'selected'
       ) {
         await this.setPolicyCookie(policy);
         // send policy to banner
