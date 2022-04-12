@@ -106,97 +106,99 @@ export function PolicyContainer({
   }, []);
 
   return (
-    <>
-      <h1
-        className={styles.centering}
-        style={visible ? { display: 'block' } : { display: 'none' }}
-      >
-        Cookie Policy for "{policy && policy.sourceUrl}"
-      </h1>
-      <div
-        id="policy-container"
-        style={visible ? { display: 'flex' } : { display: 'none' }}
-      >
-        <div className={styles.column}>
-          <h2>Purposes</h2>
-          <ul className={styles.flexList}>
-            <li>
-              <label className={styles.checkboxLabel}>
-                <input
-                  type="checkbox"
-                  checked={
-                    policy &&
-                    policy.purposes
-                      .filter(isPurposeNeeded)
-                      .every((purpose) => policy.purposeChoice[purpose.id])
-                  }
-                  onChange={(e) => {
-                    changeAllPurposes(e.target.checked);
-                  }}
-                />
-                <span className={styles.purposeId}>all</span>
-              </label>
-            </li>
-            {policy &&
-              policy.purposes.filter(isPurposeNeeded).map((purpose) => (
-                <li>
-                  <label className={styles.checkboxLabel}>
-                    <input
-                      type="checkbox"
-                      checked={policy.purposeChoice[purpose.id]}
-                      onChange={(e) => {
-                        changePurpose(purpose.id, e.target.checked);
-                      }}
-                    />
-                    <span className={styles.purposeId}>{purpose.id}</span>
-                  </label>
-                  <details className={styles.purposeDescription}>
-                    <summary className={styles.purposeSummary}>
-                      {purpose.description}
-                    </summary>
-                    {replaceNewlines(purpose.descriptionLegal)}
-                  </details>
-                </li>
-              ))}
-          </ul>
-          <button id="submit-btn" onClick={submit}>
-            Submit Preferences
-          </button>
-          <button id="whitelist-clear-btn" onClick={clearPolicyStorage}>
-            &lt;Clear Whitelist&gt;
-          </button>
-          <button id="revoke-policy-btn" onClick={revokePolicy}>
-            Revoke Choice
-          </button>
+    visible && (
+      <>
+        <h1
+          className={styles.centering}
+          style={visible ? { display: 'block' } : { display: 'none' }}
+        >
+          Cookie Policy for "{policy && policy.sourceUrl}"
+        </h1>
+        <div
+          id="policy-container"
+          style={visible ? { display: 'flex' } : { display: 'none' }}
+        >
+          <div className={styles.column}>
+            <h2>Purposes</h2>
+            <ul className={styles.flexList}>
+              <li>
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={
+                      policy &&
+                      policy.purposes
+                        .filter(isPurposeNeeded)
+                        .every((purpose) => policy.purposeChoice[purpose.id])
+                    }
+                    onChange={(e) => {
+                      changeAllPurposes(e.target.checked);
+                    }}
+                  />
+                  <span className={styles.purposeId}>all</span>
+                </label>
+              </li>
+              {policy &&
+                policy.purposes.filter(isPurposeNeeded).map((purpose) => (
+                  <li>
+                    <label className={styles.checkboxLabel}>
+                      <input
+                        type="checkbox"
+                        checked={policy.purposeChoice[purpose.id]}
+                        onChange={(e) => {
+                          changePurpose(purpose.id, e.target.checked);
+                        }}
+                      />
+                      <span className={styles.purposeId}>{purpose.id}</span>
+                    </label>
+                    <details className={styles.purposeDescription}>
+                      <summary className={styles.purposeSummary}>
+                        {purpose.description}
+                      </summary>
+                      {replaceNewlines(purpose.descriptionLegal)}
+                    </details>
+                  </li>
+                ))}
+            </ul>
+            <button id="submit-btn" onClick={submit}>
+              Submit Preferences
+            </button>
+            <button id="whitelist-clear-btn" onClick={clearPolicyStorage}>
+              &lt;Clear Whitelist&gt;
+            </button>
+            <button id="revoke-policy-btn" onClick={revokePolicy}>
+              Revoke Choice
+            </button>
+          </div>
+          <div className={styles.column}>
+            <h2>Cookie Accessors</h2>
+            <ul className={styles.flexList}>
+              {policy &&
+                policy.cookieAccessors.map((accessor) => (
+                  <li>
+                    <label
+                      className={classNames(
+                        styles.checkboxLabel,
+                        !isAccessorAvailable(accessor.id) && styles.disabled,
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={policy.cookieAccessorChoice[accessor.id]}
+                        onChange={(e) => {
+                          changeAccessor(accessor.id, e.target.checked);
+                        }}
+                        disabled={!isAccessorAvailable(accessor.id)}
+                      />
+                      "{accessor.name}" depends on purposes{' '}
+                      {accessor.purposes.join(', ')}
+                    </label>
+                  </li>
+                ))}
+            </ul>
+          </div>
         </div>
-        <div className={styles.column}>
-          <h2>Cookie Accessors</h2>
-          <ul className={styles.flexList}>
-            {policy &&
-              policy.cookieAccessors.map((accessor) => (
-                <li>
-                  <label
-                    className={classNames(
-                      styles.checkboxLabel,
-                      !isAccessorAvailable(accessor.id) && styles.disabled,
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={policy.cookieAccessorChoice[accessor.id]}
-                      onChange={(e) => {
-                        changeAccessor(accessor.id, e.target.checked);
-                      }}
-                      disabled={!isAccessorAvailable(accessor.id)}
-                    />
-                    "{accessor.name}" depends on purposes{' '}
-                    {accessor.purposes.join(', ')}
-                  </label>
-                </li>
-              ))}
-          </ul>
-        </div>
-      </div>
-    </>
+      </>
+    )
   );
 }

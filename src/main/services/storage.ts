@@ -533,7 +533,7 @@ ${other.join(breakTag)}
    */
   public async addOrUpdateCookiePolicy(
     policy: CookiePolicyExternalItem,
-  ): Promise<boolean> {
+  ): Promise<CookiePolicyInternalItem> {
     const existingItem = this.cookiePolicy.find(
       (x) => x.sourceUrl === policy.sourceUrl,
     );
@@ -547,7 +547,7 @@ ${other.join(breakTag)}
         query: { _id: existingItem._id },
         value: this.cookiePolicy[index],
       });
-      return true;
+      return this.cookiePolicy[index];
     } else {
       // add
       if (policy.state !== 'unsupported') {
@@ -561,7 +561,7 @@ ${other.join(breakTag)}
         item: policy,
       });
       this.cookiePolicy.push(listItem);
-      return false;
+      return listItem;
     }
   }
 
@@ -634,6 +634,13 @@ ${other.join(breakTag)}
         ) {
           longestMatch = policy.scope.length;
           longestMatchId = idx;
+        } else if (
+          policy.state === 'unsupported' &&
+          policy.ignored &&
+          policy.sourceUrl.length > longestMatch
+        ) {
+          longestMatch = policy.sourceUrl.length;
+          longestMatchId = idx;
         }
       });
       return policies[longestMatchId];
@@ -652,6 +659,9 @@ ${other.join(breakTag)}
       return false;
     }
     const policy = this.findPolicyByURL(url);
+    if (!!policy && policy.state === 'unsupported' && policy.ignored) {
+      return true;
+    }
     if (!policy || policy.state !== 'selected') {
       return false;
     }

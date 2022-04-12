@@ -49,6 +49,7 @@ type CookiePolicyNotSupportedItem = {
   _id?: string;
   sourceUrl: string;
   state: 'unsupported';
+  ignored?: boolean;
 };
 
 type CookiePolicyHead = {
@@ -193,6 +194,7 @@ export {
   CookieLogEntry,
   CookiePolicyInternalItem,
   CookiePolicyExternalItem,
+  CookiePolicyNotSupportedItem,
   PolicyWithChoice,
   ServerPolicy,
   PolicyNotSetError,

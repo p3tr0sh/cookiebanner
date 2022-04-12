@@ -14,6 +14,7 @@ import {
   ServerPolicy,
   getVisitorId,
   extractPolicyChoice,
+  CookiePolicyNotSupportedItem,
 } from '~/interfaces';
 import {
   ERROR_PROTOCOL,
@@ -301,6 +302,24 @@ export class View {
       }
     });
 
+    ipcMain.on(
+      'banner-ignore-warning',
+      async (_, arg: { issuer: number; ignore: boolean }) => {
+        if (arg.issuer === this.webContents.id) {
+          const policy = Application.instance.storage.findPolicyByURL(
+            checkURL(this.webContents.getURL()).href,
+          ) as CookiePolicyNotSupportedItem;
+          await Application.instance.storage.addOrUpdateCookiePolicy({
+            ...policy,
+            ignored: arg.ignore,
+          });
+          // TODO: delete all cookies when revoking ignore
+          this.nativeCookieBannerWindow.destroy();
+          this.webContents.reload();
+        }
+      },
+    );
+
     // send received TCData from the Content window to the Banner window
     ipcMain.on('tcdata', (evt, tcdata) => {
       this.nativeCookieBannerWindow.webContents.send('cookieChannel', {
@@ -354,13 +373,9 @@ export class View {
           cookieAccessorChoice:
             state === 'selected' ? policy.cookieAccessorChoice : {},
         };
-        await Application.instance.storage.addOrUpdateCookiePolicy(item);
 
-        const updatedPolicy = await Application.instance.storage.findOne<CookiePolicyInternalItem>(
-          {
-            scope: 'cookiepolicy',
-            query: { sourceUrl },
-          },
+        const updatedPolicy = await Application.instance.storage.addOrUpdateCookiePolicy(
+          item,
         );
 
         if (updatedPolicy.state === 'not-selected') {
@@ -506,22 +521,25 @@ export class View {
   }
 
   private sendToBanner(command: 'message' | 'policy') {
+    const url = checkURL(this.webContents.getURL());
+    if (!url) {
+      throw new Error('Site not loaded, can not send policy to banner.');
+    }
+    const policy = Application.instance.storage.findPolicyByURL(url.href);
+    if (!policy) {
+      throw new PolicyNotFoundError();
+    }
+    console.log(policy);
+    console.log(command);
     if (command === 'message') {
       this.nativeCookieBannerWindow.webContents.send('banner-show', {
         issuer: this.webContents.id,
         mode: 'message',
         headline: `Website does not support CookiePolicyManager`,
         message: `Your Browser can not control the privacy regarding cookies of the target website "${this.webContents.getURL()}".`,
+        policy,
       });
     } else if (command === 'policy') {
-      const url = checkURL(this.webContents.getURL());
-      if (!url) {
-        throw new Error('Site not loaded, can not send policy to banner.');
-      }
-      const policy = Application.instance.storage.findPolicyByURL(url.href);
-      if (!policy) {
-        throw new PolicyNotFoundError();
-      }
       this.nativeCookieBannerWindow.webContents.send('banner-show', {
         issuer: this.webContents.id,
         mode: 'policy',
@@ -590,7 +608,10 @@ export class View {
         // send policy to banner
         throw new PolicyNotSetError();
       }
-      if (policy.state === 'unsupported' || policy.state === 'not-selected') {
+      if (
+        (policy.state === 'unsupported' && !policy.ignored) ||
+        policy.state === 'not-selected'
+      ) {
         // always show banner for not supported websites or not selected policies
         return true;
       }
@@ -705,9 +726,9 @@ export class View {
       // give the IPC some time to send policy data to the banner before opening it
       this.nativeCookieBannerWindow.show();
     }, 50);
-    // this.nativeCookieBannerWindow.webContents.openDevTools({
-    //   mode: 'detach',
-    // });
+    this.nativeCookieBannerWindow.webContents.openDevTools({
+      mode: 'detach',
+    });
   }
 
   public get webContents() {
