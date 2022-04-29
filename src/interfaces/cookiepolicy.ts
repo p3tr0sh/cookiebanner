@@ -1,4 +1,4 @@
-import { Flavor } from '~/utils';
+import { filterDict, Flavor } from '~/utils';
 import { v4 as genUUID } from 'uuid';
 
 type PurposeId = Flavor<number, 'PurposeId'>;
@@ -84,6 +84,38 @@ function extractPolicyChoice({
     consentTimestamp,
     purposeChoice,
     cookieAccessorChoice,
+  };
+}
+
+function extractPolicyChoiceAccessor(
+  {
+    version,
+    visitorId,
+    consentTimestamp,
+    purposeChoice,
+    cookieAccessorChoice,
+    cookieAccessors,
+    purposes,
+  }: CookiePolicyInternal,
+  accessor: CookieAccessorId,
+): { version: number } & PolicyChoice {
+  const cai: CookieAccessorId = 0;
+  console.log(
+    `purpose Choice: ${JSON.stringify(purposeChoice)}; purposes: ${
+      cookieAccessors[accessor].purposes
+    }; filtered: ${JSON.stringify(
+      filterDict(purposeChoice, cookieAccessors[accessor].purposes),
+    )}`,
+  );
+  return {
+    version,
+    visitorId,
+    consentTimestamp,
+    purposeChoice: filterDict(
+      purposeChoice,
+      cookieAccessors[accessor].purposes,
+    ),
+    cookieAccessorChoice: { [cai]: cookieAccessorChoice[accessor] },
   };
 }
 
@@ -201,6 +233,7 @@ export {
   PolicyNotFoundError,
   PolicyServiceNotProvidedError,
   extractPolicyChoice,
+  extractPolicyChoiceAccessor,
   getVisitorId,
   mergePolicy,
   generatePolicyInternals,

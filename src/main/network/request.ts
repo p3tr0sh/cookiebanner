@@ -43,18 +43,21 @@ export const requestURL = (url: string): Promise<ResponseDetails> =>
 export const transmitJSON = <T>(url: URL, data: Object): Promise<T> =>
   new Promise((resolve, reject) => {
     let { request } = http;
-    // if (url.protocol === 'https:') {
-    //   request = https.request;
-    // }
+    let agent = http.globalAgent;
+    if (url.protocol === 'https:') {
+      request = https.request;
+      agent = new https.Agent({ rejectUnauthorized: false });
+    }
     const content = JSON.stringify(data);
     const r = request(
       {
         host: url.hostname,
         port: url.port,
-        // protocol: url.protocol,
+        protocol: url.protocol,
         path: '/CookiePolicyManager',
         method: 'POST',
         headers: { 'content-length': content.length },
+        agent,
       },
       function (response) {
         const { statusCode } = response;

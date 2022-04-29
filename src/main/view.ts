@@ -15,6 +15,7 @@ import {
   getVisitorId,
   extractPolicyChoice,
   CookiePolicyNotSupportedItem,
+  extractPolicyChoiceAccessor,
 } from '~/interfaces';
 import {
   ERROR_PROTOCOL,
@@ -390,8 +391,33 @@ export class View {
           checkURL(sourceUrl),
           extractPolicyChoice(updatedPolicy),
         );
-        if (result.status !== 0) {
+        if (!result || result.status !== 0) {
           throw new Error('Transmission of policy did not work.');
+        }
+        for (const accessor of updatedPolicy.cookieAccessors) {
+          if (accessor.id === 0) {
+            continue;
+          }
+          const accessorUrl = checkURL(`https://${accessor.scope}:4444`, true);
+          const accessorPolicy = extractPolicyChoiceAccessor(
+            updatedPolicy,
+            accessor.id,
+          );
+          transmitJSON<{ status: number }>(accessorUrl, accessorPolicy)
+            .then((res) => {
+              if (!res || res.status !== 0) {
+                throw new Error(
+                  'Transmission of policy to third-party did not work.',
+                );
+              }
+            })
+            .catch((reason) => {
+              if (reason.message === 'Cookie policy manager not supported') {
+                console.log('Cookie policy manager not supported by host');
+              } else {
+                throw reason;
+              }
+            });
         }
 
         // remove all cookies that don't comply the updated policy
@@ -529,7 +555,7 @@ export class View {
     if (!policy) {
       throw new PolicyNotFoundError();
     }
-    console.log(policy);
+    // console.log(policy);
     console.log(command);
     if (command === 'message') {
       this.nativeCookieBannerWindow.webContents.send('banner-show', {

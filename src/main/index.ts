@@ -26,6 +26,7 @@ app.commandLine.appendSwitch(
 
 if (process.env.NODE_ENV === 'development') {
   app.commandLine.appendSwitch('remote-debugging-port', '9222');
+  app.commandLine.appendSwitch('ignore-certificate-errors');
 }
 
 ipcMain.setMaxListeners(0);

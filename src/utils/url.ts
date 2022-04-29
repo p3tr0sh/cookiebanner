@@ -60,6 +60,8 @@ export function checkURL(urlString: string, secure?: boolean): URL | undefined {
 
 export function matchesScope(url: URL, scope: URL): boolean {
   return (
+    url &&
+    scope &&
     url.hostname.endsWith(scope.hostname) &&
     (!scope.port || url.port === scope.port)
   );
