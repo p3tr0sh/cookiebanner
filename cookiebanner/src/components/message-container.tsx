@@ -45,27 +45,31 @@ export function MessageContainer({
 
   return (
     visible && (
-      <div
-        id="message-container"
-        style={visible ? { display: 'initial' } : { display: 'none' }}
-      >
+      <>
         <h1 className={styles.centering} style={{ color: '#bd1e3c' }}>
           {headline}
         </h1>
-        <p>{message}</p>
-        <button onClick={historyBack}>Go back</button>
-        <br />
-        <input
-          type="checkbox"
-          checked={ignoredWarning}
-          onChange={(e) => {
-            setIgnore(e.target.checked);
-            console.log(e.target.checked);
-          }}
-        />
-        Accept cookies
-        <button onClick={ignoreWarning}>Save and proceed</button>
-      </div>
+        <div id="message-container" style={{ padding: '0.5rem' }}>
+          <p style={{ whiteSpace: 'pre-wrap' }}>{message}</p>
+          <button onClick={historyBack}>Go back</button>
+          <br />
+          <label>
+            <input
+              type="checkbox"
+              checked={ignoredWarning}
+              onChange={(e) => {
+                setIgnore(e.target.checked);
+                console.log(e.target.checked);
+              }}
+            />
+            Accept cookies
+          </label>
+          <button onClick={ignoreWarning} style={{ marginLeft: '0.5rem' }}>
+            Save and proceed
+          </button>
+          <br />
+        </div>
+      </>
     )
   );
 }

@@ -560,7 +560,7 @@ export class View {
         issuer: this.webContents.id,
         mode: 'message',
         headline: `Website does not support Native Cookie Consent`,
-        message: `Your Browser can not control the privacy regarding cookies of the target website "${this.webContents.getURL()}".`,
+        message: `Your Browser can not control your privacy regarding cookies of the target website "${this.webContents.getURL()}".\nYou can choose to leave this website with the "Go back" button, accept cookies by checking the checkbox or continue to block cookies and save this preference with the "Save and proceed" button.`,
         policy,
       });
     } else if (command === 'policy') {

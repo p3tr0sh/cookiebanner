@@ -163,9 +163,9 @@ export function PolicyContainer({
             <button id="submit-btn" onClick={submit}>
               Submit Preferences
             </button>
-            <button id="whitelist-clear-btn" onClick={clearPolicyStorage}>
+            {/* <button id="whitelist-clear-btn" onClick={clearPolicyStorage}>
               &lt;Clear Whitelist&gt;
-            </button>
+            </button> */}
             <button id="revoke-policy-btn" onClick={revokePolicy}>
               Revoke Choice
             </button>
@@ -190,7 +190,7 @@ export function PolicyContainer({
                         }}
                         disabled={!isAccessorAvailable(accessor.id)}
                       />
-                      "{accessor.name}" depends on purposes{' '}
+                      "{accessor.scope}" depends on purposes{' '}
                       {accessor.purposes.join(', ')}
                     </label>
                   </li>
