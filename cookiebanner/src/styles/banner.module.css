@@ -41,11 +41,12 @@
 
 button {
     margin-right: 0.5rem;
+    margin-bottom: 0.5rem;
 }
 
 .closeButton {
     margin-left: 0.5rem;
     margin-bottom: 0.5rem;
-    position: absolute;
-    bottom: 8px;
+    /* position: absolute;
+    bottom: 8px; */
 }

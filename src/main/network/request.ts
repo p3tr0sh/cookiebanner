@@ -54,7 +54,7 @@ export const transmitJSON = <T>(url: URL, data: Object): Promise<T> =>
         host: url.hostname,
         port: url.port,
         protocol: url.protocol,
-        path: '/CookiePolicyManager',
+        path: '/ncc',
         method: 'POST',
         headers: { 'content-length': content.length },
         agent,

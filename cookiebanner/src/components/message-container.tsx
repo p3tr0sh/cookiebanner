@@ -25,8 +25,8 @@ export function MessageContainer({
       setHeadline(arg.headline);
       setMessage(arg.message);
       setIgnore(!!arg.policy.ignored);
-      console.log(`ignored at start: ${arg.policy.ignored}`);
-      console.log(`ignored at start!!: ${!!arg.policy.ignored}`);
+      // console.log(`ignored at start: ${arg.policy.ignored}`);
+      // console.log(`ignored at start!!: ${!!arg.policy.ignored}`);
     }
     ipc.on('banner-show', setData);
     return () => {
@@ -63,7 +63,7 @@ export function MessageContainer({
             console.log(e.target.checked);
           }}
         />
-        Ignore warning
+        Accept cookies
         <button onClick={ignoreWarning}>Save and proceed</button>
       </div>
     )

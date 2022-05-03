@@ -16,6 +16,7 @@ import {
   extractPolicyChoice,
   CookiePolicyNotSupportedItem,
   extractPolicyChoiceAccessor,
+  NCC_COOKIE_NAME,
 } from '~/interfaces';
 import {
   ERROR_PROTOCOL,
@@ -125,7 +126,7 @@ export class View {
       const loading = this.webContents.isLoading();
 
       const allowed =
-        cookie.name === 'cookiepolicy' ||
+        cookie.name === NCC_COOKIE_NAME ||
         Application.instance.storage.isCookieAllowed(
           cookie,
           this.webContents.getURL(),
@@ -265,7 +266,7 @@ export class View {
     );
 
     this.webContents.addListener('did-finish-load', () => {
-      // setup my HttpRequest to request CookiePolicyManager
+      // setup my HttpRequest to request NCC
       this.handleCookiePolicy()
         .then((showBanner) => {
           // search for __tcfapi, see view-preload.ts
@@ -312,7 +313,7 @@ export class View {
           ) as CookiePolicyNotSupportedItem;
           await Application.instance.storage.addOrUpdateCookiePolicy({
             ...policy,
-            ignored: arg.ignore,
+            acceptAnyway: arg.ignore ? 'yes' : 'no',
           });
           // TODO: delete all cookies when revoking ignore
           this.nativeCookieBannerWindow.destroy();
@@ -412,8 +413,8 @@ export class View {
               }
             })
             .catch((reason) => {
-              if (reason.message === 'Cookie policy manager not supported') {
-                console.log('Cookie policy manager not supported by host');
+              if (reason.message === 'Native Cookie Consent not supported') {
+                console.log('Native Cookie Consent not supported by host');
               } else {
                 throw reason;
               }
@@ -561,7 +562,7 @@ export class View {
       this.nativeCookieBannerWindow.webContents.send('banner-show', {
         issuer: this.webContents.id,
         mode: 'message',
-        headline: `Website does not support CookiePolicyManager`,
+        headline: `Website does not support Native Cookie Consent`,
         message: `Your Browser can not control the privacy regarding cookies of the target website "${this.webContents.getURL()}".`,
         policy,
       });
@@ -582,7 +583,7 @@ export class View {
     }
     console.log(`Deleting ${this.cookieJar.length} Cookies...`);
     for (const cookie of this.cookieJar) {
-      if (cookie.name !== 'cookiepolicy') {
+      if (cookie.name !== NCC_COOKIE_NAME) {
         const cookieUrl = checkURL(cookie.domain, !!cookie.secure).href;
         await this.webContents.session.cookies.remove(cookieUrl, cookie.name);
       }
@@ -594,7 +595,7 @@ export class View {
   private isCookiePolicySet(domain: string): Promise<boolean> {
     return new Promise((resolve, reject) => {
       this.webContents.session.cookies
-        .get({ domain, name: 'cookiepolicy' })
+        .get({ domain, name: NCC_COOKIE_NAME })
         .then((c) => {
           resolve(c.length > 0);
         })
@@ -611,13 +612,13 @@ export class View {
       // Remove cookie after user withdrew consent
       return this.webContents.session.cookies.remove(
         scope.href,
-        'cookiepolicy',
+        NCC_COOKIE_NAME,
       );
     }
     return this.webContents.session.cookies.set({
       url: scope.href,
       domain: scope.hostname,
-      name: 'cookiepolicy',
+      name: NCC_COOKIE_NAME,
       value: getVisitorId(policy),
     });
   }
@@ -635,7 +636,8 @@ export class View {
         throw new PolicyNotSetError();
       }
       if (
-        (policy.state === 'unsupported' && !policy.ignored) ||
+        (policy.state === 'unsupported' &&
+          policy.acceptAnyway === 'not-selected') ||
         policy.state === 'not-selected'
       ) {
         // always show banner for not supported websites or not selected policies
@@ -665,7 +667,7 @@ export class View {
         throw e;
       }
     }
-    // request policy from [hostname]/CookiePolicyManager, save it and show banner
+    // request policy from [hostname]/ncc, save it and show banner
     const visitedSite = url.href;
     console.log(`Request ServerPolicy`);
     let response: ServerPolicy;
@@ -676,7 +678,7 @@ export class View {
       });
     } catch (e) {
       // website does not support policyManager, show warning on banner
-      // console.log('Site does not provide the CookiePolicyManager interface.');
+      // console.log('Site does not provide the NCC interface.');
       const item: CookiePolicyExternalItem = {
         sourceUrl: url.origin,
         state: 'unsupported',

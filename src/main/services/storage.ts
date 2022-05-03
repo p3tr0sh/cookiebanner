@@ -19,6 +19,7 @@ import {
   generatePolicyInternals,
   CookieLogEntry,
   shallowEqual,
+  NCC_COOKIE_NAME,
 } from '~/interfaces';
 import { countVisitedTimes } from '~/utils/history';
 import { promises } from 'fs';
@@ -574,7 +575,7 @@ ${other.join(breakTag)}
     if (
       !policy ||
       policy.state !== 'selected' ||
-      cookie.name === 'cookiepolicy'
+      cookie.name === NCC_COOKIE_NAME
     ) {
       return;
     }
@@ -586,17 +587,14 @@ ${other.join(breakTag)}
       name: cookie.name,
     };
 
-    if (operation == 'add') {
-      // remove first and then update to avoid duplicates
-      policy.cookies = policy.cookies.filter(
-        (item) => !shallowEqual(item, logEntry),
-      );
+    // remove first and then add again to avoid duplicates
+    policy.cookies = policy.cookies.filter(
+      (item) => !shallowEqual(item, logEntry),
+    );
+    if (operation === 'add') {
       policy.cookies.push(logEntry);
-    } else {
-      policy.cookies = policy.cookies.filter(
-        (item) => !shallowEqual(item, logEntry),
-      );
     }
+
     this.cookiePolicy[idx] = policy;
     await this.update({
       scope: 'cookiepolicy',
@@ -636,7 +634,7 @@ ${other.join(breakTag)}
           longestMatchId = idx;
         } else if (
           policy.state === 'unsupported' &&
-          policy.ignored &&
+          policy.acceptAnyway !== 'not-selected' &&
           policy.sourceUrl.length > longestMatch
         ) {
           longestMatch = policy.sourceUrl.length;
@@ -659,7 +657,11 @@ ${other.join(breakTag)}
       return false;
     }
     const policy = this.findPolicyByURL(url);
-    if (!!policy && policy.state === 'unsupported' && policy.ignored) {
+    if (
+      !!policy &&
+      policy.state === 'unsupported' &&
+      policy.acceptAnyway === 'yes'
+    ) {
       return true;
     }
     if (!policy || policy.state !== 'selected') {

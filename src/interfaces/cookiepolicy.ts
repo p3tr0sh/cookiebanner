@@ -5,6 +5,8 @@ type PurposeId = Flavor<number, 'PurposeId'>;
 type CookieAccessorId = Flavor<number, 'CookieAccessorId'>;
 type VisitorId = Flavor<string, 'VisitorId'>;
 
+const NCC_COOKIE_NAME = 'ncc_id';
+
 type Purpose = {
   id: PurposeId;
   name: string;
@@ -49,7 +51,7 @@ type CookiePolicyNotSupportedItem = {
   _id?: string;
   sourceUrl: string;
   state: 'unsupported';
-  ignored?: boolean;
+  acceptAnyway?: 'yes' | 'no' | 'not-selected';
 };
 
 type CookiePolicyHead = {
@@ -95,7 +97,6 @@ function extractPolicyChoiceAccessor(
     purposeChoice,
     cookieAccessorChoice,
     cookieAccessors,
-    purposes,
   }: CookiePolicyInternal,
   accessor: CookieAccessorId,
 ): { version: number } & PolicyChoice {
@@ -238,4 +239,5 @@ export {
   mergePolicy,
   generatePolicyInternals,
   shallowEqual,
+  NCC_COOKIE_NAME,
 };
