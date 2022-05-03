@@ -269,9 +269,6 @@ export class View {
       // setup my HttpRequest to request NCC
       this.handleCookiePolicy()
         .then((showBanner) => {
-          // search for __tcfapi, see view-preload.ts
-          // this.send('tcfapi-grabber');
-
           if (showBanner) {
             this.openCookieBanner();
           }
