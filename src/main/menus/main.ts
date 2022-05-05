@@ -187,16 +187,6 @@ export const getMainMenu = () => {
           },
           'Reload ignoring cache',
         ),
-        ...createMenuItem(
-          ['CmdOrCtrl+Shift+C'],
-          () => {
-            // TODO
-            Application.instance.windows.current.viewManager.selected.openCookieBanner(
-              true,
-            );
-          },
-          'Open Cookie Banner',
-        ),
       ],
     },
     {
@@ -352,6 +342,15 @@ export const getMainMenu = () => {
               { role: 'window' },
             ]
           : [{ role: 'close', accelerator: '' }]),
+        ...createMenuItem(
+          ['CmdOrCtrl+Shift+C'],
+          () => {
+            Application.instance.windows.current.viewManager.selected.openCookieBanner(
+              true,
+            );
+          },
+          'Open Cookie Banner',
+        ),
         { type: 'separator' },
         {
           label: 'Always on top',
