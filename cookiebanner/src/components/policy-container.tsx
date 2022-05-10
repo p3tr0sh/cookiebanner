@@ -37,6 +37,11 @@ export function PolicyContainer({
     ipc.send('banner-clear-policies', { issuer });
   }
 
+  function acceptAll() {
+    changeAllPurposes(true);
+    submit();
+  }
+
   function revokePolicy() {
     ipc.send('policy-choice', {
       issuer,
@@ -163,6 +168,10 @@ export function PolicyContainer({
             <button id="submit-btn" onClick={submit}>
               Submit Preferences
             </button>
+            <button id="accept-btn" onClick={acceptAll}>
+              Acceept all
+            </button>
+            <br />
             {/* <button id="whitelist-clear-btn" onClick={clearPolicyStorage}>
               &lt;Clear Whitelist&gt;
             </button> */}
