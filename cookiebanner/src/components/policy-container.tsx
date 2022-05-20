@@ -169,7 +169,7 @@ export function PolicyContainer({
               Submit Preferences
             </button>
             <button id="accept-btn" onClick={acceptAll}>
-              Acceept all
+              Accept all
             </button>
             <br />
             {/* <button id="whitelist-clear-btn" onClick={clearPolicyStorage}>
