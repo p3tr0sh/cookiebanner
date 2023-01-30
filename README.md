@@ -1,3 +1,11 @@
+Modified version of the Wexond browser base to support browser-integrated cookie banners for
+- improved control over the execution of the user's choice
+- controlled and unified design (no shady business)
+- default values - for less interaction with annoying banners
+- and even more
+
+---
+
 <p align="center">
   <a href="https://wexond.net"><img src="static/icons/icon.png" width="256"></a>
 </p>
